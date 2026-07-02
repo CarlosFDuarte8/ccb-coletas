@@ -15,10 +15,6 @@ const sections = {
     title: "Equipes",
     description: "Organize responsáveis, permissões e disponibilidade.",
   },
-  relatorios: {
-    title: "Relatórios",
-    description: "Analise indicadores e resultados da operação.",
-  },
   configuracoes: {
     title: "Configurações",
     description: "Personalize os dados e preferências do sistema.",
