@@ -31,3 +31,8 @@ export const CheckCircleIcon = (props: IconProps) => <Icon {...props}><circle cx
 export const ClockIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></Icon>;
 export const PlusIcon = (props: IconProps) => <Icon {...props}><path d="M12 5v14M5 12h14"/></Icon>;
 export const ArrowUpRightIcon = (props: IconProps) => <Icon {...props}><path d="M7 17 17 7M7 7h10v10"/></Icon>;
+export const TrashIcon = (props: IconProps) => <Icon {...props}><path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v5M14 11v5"/></Icon>;
+export const BanknoteIcon = (props: IconProps) => <Icon {...props}><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 9H5v1M18 15h1v-1"/></Icon>;
+export const BuildingIcon = (props: IconProps) => <Icon {...props}><path d="M3 21h18M5 21V7l7-4 7 4v14M9 10h1M14 10h1M9 14h1M14 14h1M10 21v-3h4v3"/></Icon>;
+export const ReceiptIcon = (props: IconProps) => <Icon {...props}><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6M9 12h6M9 16h3"/></Icon>;
+export const DownloadIcon = (props: IconProps) => <Icon {...props}><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></Icon>;

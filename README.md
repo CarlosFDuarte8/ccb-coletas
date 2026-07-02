@@ -37,3 +37,27 @@ Os arquivos `page.tsx` e `layout.tsx` permanecem Server Components por padrão. 
 ## Temas
 
 A preferência é armazenada no navegador. O modo **Automático** acompanha o sistema operacional em tempo real e a inicialização evita a troca visível de cores durante o carregamento.
+
+## Persistência temporária
+
+Igrejas, coletas, contagens e depósitos ficam no `localStorage`, sob uma camada isolada em `lib/storage`. Isso permite substituir o armazenamento por uma API ou Firebase sem acoplar as telas à tecnologia escolhida.
+
+Enquanto não houver banco remoto, os dados pertencem somente ao navegador atual e podem ser perdidos se os dados do site forem apagados. Use **Exportar backup** regularmente na tela de coletas.
+
+## Fluxo mensal
+
+1. Selecione a igreja e a competência (por exemplo, julho de 2026).
+2. Registre as coletas da competência.
+3. Gere o depósito como rascunho pela contagem de cédulas e moedas.
+4. Abra o rascunho, informe a data bancária e o comprovante e confirme-o. A data pode pertencer ao mês seguinte sem alterar a competência.
+5. Feche o mês quando não houver rascunhos ou diferença entre o total coletado e depositado.
+
+Uma competência fechada bloqueia inclusões, alterações e exclusões. Ela pode ser reaberta explicitamente para uma correção auditável no fluxo da interface.
+
+## Programação das igrejas
+
+Cada igreja possui sua própria programação semanal de cultos e RJM. Exceções são registradas por data e podem cancelar ou alterar apenas um evento específico, preservando a regra dos demais dias. A Incra 08 inicia com sexta-feira às 19:30, RJM domingo às 10:00 e culto domingo às 19:00; em 04/10/2026 a RJM está cancelada e o culto noturno identificado como Santa Ceia.
+
+Na tela de igrejas, os cadastros são agrupados por setor. Inclusões e edições acontecem em modal, e cada card oferece acesso à programação específica daquela igreja.
+
+Na competência mensal, as coletas previstas são calculadas automaticamente a partir dessa programação. Datas canceladas por exceção não aparecem, alterações como Santa Ceia recebem o nome correto e o lançamento financeiro só é criado quando um valor real é informado.

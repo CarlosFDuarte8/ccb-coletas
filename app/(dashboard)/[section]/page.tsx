@@ -3,10 +3,6 @@ import { notFound } from "next/navigation";
 import { PackageIcon } from "@/components/icons";
 
 const sections = {
-  coletas: {
-    title: "Coletas",
-    description: "Cadastre, acompanhe e gerencie todas as coletas da operação.",
-  },
   agenda: {
     title: "Agenda",
     description: "Visualize os compromissos e organize a programação das equipes.",

@@ -1,7 +1,7 @@
 export type NavigationItem = {
   label: string;
   href: string;
-  icon: "home" | "package" | "calendar" | "route" | "users" | "chart";
+  icon: "home" | "package" | "calendar" | "route" | "users" | "chart" | "building";
 };
 
 export const mainNavigation: NavigationItem[] = [
@@ -12,6 +12,7 @@ export const mainNavigation: NavigationItem[] = [
 ];
 
 export const managementNavigation: NavigationItem[] = [
+  { label: "Igrejas", href: "/igrejas", icon: "building" },
   { label: "Equipes", href: "/equipes", icon: "users" },
   { label: "Relatórios", href: "/relatorios", icon: "chart" },
 ];

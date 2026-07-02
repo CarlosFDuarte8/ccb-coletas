@@ -1,0 +1,137 @@
+export type EntityId = string;
+
+export type Sector = {
+  id: EntityId;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ChurchContactRole =
+  | "Responsável caixa de manutenção"
+  | "Auxiliar"
+  | "Cooperador"
+  | "Cooperador de jovens e menores";
+
+export type ChurchContact = {
+  id: EntityId;
+  name: string;
+  role: ChurchContactRole;
+};
+
+export type Church = {
+  id: EntityId;
+  sectorId: EntityId;
+  name: string;
+  code: string;
+  address: string;
+  latitude: string;
+  longitude: string;
+  contacts: ChurchContact[];
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MeetingType = "culto" | "rjm";
+export type CollectionType = "normal" | "especial";
+
+export type Collection = {
+  id: EntityId;
+  churchId: EntityId;
+  competency: string;
+  date: string;
+  meetingType: MeetingType;
+  collectionType: CollectionType;
+  amountInCents: number;
+  notes: string;
+  serviceScheduleId?: EntityId;
+  serviceTime?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ScheduledOccurrence = {
+  id: string;
+  churchId: EntityId;
+  serviceScheduleId: EntityId;
+  date: string;
+  time: string;
+  title: string;
+  meetingType: MeetingType;
+  exceptionDescription?: string;
+};
+
+export type DenominationCount = Record<string, number>;
+
+export type Deposit = {
+  id: EntityId;
+  churchId: EntityId;
+  competency: string;
+  date: string;
+  transactionNumber: string;
+  amountInCents: number;
+  denominationCounts: DenominationCount;
+  notes: string;
+  status: "draft" | "confirmed";
+  confirmedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MonthlyCompetency = {
+  id: EntityId;
+  churchId: EntityId;
+  competency: string;
+  status: "open" | "closed";
+  closedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ServiceSchedule = {
+  id: EntityId;
+  churchId: EntityId;
+  weekday: number;
+  time: string;
+  meetingType: MeetingType;
+  title: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ScheduleOverride = {
+  scheduleId: EntityId;
+  status: "cancelled" | "changed";
+  title?: string;
+  time?: string;
+};
+
+export type ScheduleException = {
+  id: EntityId;
+  churchId: EntityId;
+  date: string;
+  description: string;
+  overrides: ScheduleOverride[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppDatabase = {
+  version: 3;
+  sectors: Sector[];
+  churches: Church[];
+  collections: Collection[];
+  deposits: Deposit[];
+  competencies: MonthlyCompetency[];
+  serviceSchedules: ServiceSchedule[];
+  scheduleExceptions: ScheduleException[];
+};
+
+export type NewCollection = Omit<Collection, "id" | "createdAt" | "updatedAt">;
+export type NewDeposit = Omit<Deposit, "id" | "createdAt" | "updatedAt">;
+export type DepositUpdate = Pick<Deposit, "date" | "transactionNumber" | "amountInCents" | "denominationCounts" | "notes">;
+export type ServiceScheduleInput = Pick<ServiceSchedule, "churchId" | "weekday" | "time" | "meetingType" | "title" | "active">;
+export type ScheduleExceptionInput = Pick<ScheduleException, "churchId" | "date" | "description" | "overrides">;
+export type ChurchUpdate = Pick<Church, "name" | "code" | "sectorId" | "address" | "latitude" | "longitude" | "contacts">;

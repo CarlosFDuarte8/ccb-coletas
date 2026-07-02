@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { mainNavigation, managementNavigation, type NavigationItem } from "@/config/navigation";
 import {
   CalendarIcon,
+  BuildingIcon,
   ChartIcon,
   ChevronLeftIcon,
   CloseIcon,
@@ -22,6 +23,7 @@ const icons = {
   route: RouteIcon,
   users: UsersIcon,
   chart: ChartIcon,
+  building: BuildingIcon,
 };
 
 type SidebarProps = {
