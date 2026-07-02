@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CCB Coletas
 
-## Getting Started
+Base web para gestão de coletas, construída com Next.js 16, React 19, TypeScript e Tailwind CSS 4.
 
-First, run the development server:
+## Executando localmente
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+A aplicação estará disponível em [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Organização
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```text
+app/
+  (dashboard)/       # Rotas que compartilham a estrutura administrativa
+components/
+  layout/            # Sidebar, topbar, footer e shell responsivo
+  theme/             # Tema claro, escuro e automático
+  icons.tsx          # Ícones vetoriais reutilizáveis
+config/
+  navigation.ts      # Fonte única dos itens de navegação
+public/              # Arquivos estáticos
+```
 
-## Learn More
+Os arquivos `page.tsx` e `layout.tsx` permanecem Server Components por padrão. Componentes interativos recebem `"use client"` somente onde o navegador é realmente necessário.
 
-To learn more about Next.js, take a look at the following resources:
+## Comandos
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `npm run dev`: servidor de desenvolvimento
+- `npm run build`: build otimizado de produção
+- `npm run start`: executa o build de produção
+- `npm run lint`: valida a qualidade do código
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Temas
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+A preferência é armazenada no navegador. O modo **Automático** acompanha o sistema operacional em tempo real e a inicialização evita a troca visível de cores durante o carregamento.
