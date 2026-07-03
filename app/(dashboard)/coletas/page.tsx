@@ -22,13 +22,9 @@ import { useDatabase } from "@/hooks/use-database";
 import { formatCurrency } from "@/lib/domain/money";
 import { buildMonthlySchedule } from "@/lib/domain/schedule";
 import { localDatabase } from "@/lib/storage/local-database";
+import { useChurchSelection } from "@/components/churches/church-selection-provider";
 
 type OpenModal = "collection" | "deposit-new" | `deposit:${string}` | null;
-
-function currentCompetency() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
 
 function previousCompetency(competency: string) {
   const [year, month] = competency.split("-").map(Number);
@@ -48,14 +44,11 @@ function formatDate(date: string) {
 
 export default function CollectionsPage() {
   const database = useDatabase();
-  const [competency, setCompetency] = useState(currentCompetency);
-  const [churchId, setChurchId] = useState(database.churches[0]?.id ?? "");
+  const { church, churchId: selectedChurchId, setChurchId, competency, setCompetency } = useChurchSelection();
   const [openModal, setOpenModal] = useState<OpenModal>(null);
   const [selectedOccurrenceId, setSelectedOccurrenceId] = useState<string | null>(null);
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
 
-  const church = database.churches.find((item) => item.id === churchId) ?? database.churches[0];
-  const selectedChurchId = church?.id ?? "";
   const collections = useMemo(
     () => database.collections.filter((item) => item.churchId === selectedChurchId && item.competency === competency).sort((a, b) => b.date.localeCompare(a.date)),
     [database.collections, selectedChurchId, competency],
@@ -129,10 +122,11 @@ export default function CollectionsPage() {
           <p className="mt-2 max-w-2xl text-sm text-muted">Os registros exibidos pertencem somente à competência selecionada.</p>
           <button className="button-ghost mt-2 -ml-2" onClick={exportBackup} type="button"><DownloadIcon className="size-4" /> Exportar backup</button>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[420px]">
-          <label className="field-label">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 lg:min-w-48">
+          <label className="field-label lg:hidden">
             Igreja
             <SearchableSelect
+              key={selectedChurchId}
               onChange={(value) => { if (value) setChurchId(value); }}
               options={database.churches.map((item) => ({ value: item.id, label: item.name, description: `${item.code} · ${database.sectors.find((sector) => sector.id === item.sectorId)?.name ?? "Sem setor"}` }))}
               placeholder="Buscar igreja..."

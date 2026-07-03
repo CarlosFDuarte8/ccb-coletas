@@ -1,4 +1,4 @@
-import type { ReportChurch, ReportMonth } from "@/lib/reports/report";
+import type { ExpenseReportRow, ReportChurch, ReportMonth } from "@/lib/reports/report";
 import { formatCurrency } from "@/lib/domain/money";
 
 function compactMoney(valueInCents: number) {
@@ -11,13 +11,14 @@ export function EvolutionChart({ months }: { months: ReportMonth[] }) {
   const chartTop = 20;
   const baseline = 215;
   const chartHeight = baseline - chartTop;
-  const maximum = Math.max(1, ...months.flatMap((month) => [month.collectedInCents, month.depositedInCents]));
+  const maximum = Math.max(1, ...months.flatMap((month) => [month.collectedInCents, month.depositedInCents, month.expensesInCents]));
 
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-muted">
         <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-sm bg-brand" /> Coletado</span>
         <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-sm bg-[#4f8bd6]" /> Depositado</span>
+        <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-sm bg-[#d99a38]" /> Despesas</span>
       </div>
       <div className="overflow-x-auto pb-1">
         <svg aria-label="Gráfico de evolução mensal" className="h-[260px] min-w-full" role="img" viewBox={`0 0 ${width} ${height}`}>
@@ -30,10 +31,12 @@ export function EvolutionChart({ months }: { months: ReportMonth[] }) {
             const center = 52 + slot * index + slot / 2;
             const collectedHeight = chartHeight * (month.collectedInCents / maximum);
             const depositedHeight = chartHeight * (month.depositedInCents / maximum);
+            const expensesHeight = chartHeight * (month.expensesInCents / maximum);
             return (
               <g key={month.competency}>
-                <rect fill="var(--brand)" height={collectedHeight} rx="3" width="15" x={center - 17} y={baseline - collectedHeight}><title>{month.label}: {formatCurrency(month.collectedInCents)} coletado</title></rect>
-                <rect fill="#4f8bd6" height={depositedHeight} rx="3" width="15" x={center + 2} y={baseline - depositedHeight}><title>{month.label}: {formatCurrency(month.depositedInCents)} depositado</title></rect>
+                <rect fill="var(--brand)" height={collectedHeight} rx="3" width="13" x={center - 21} y={baseline - collectedHeight}><title>{month.label}: {formatCurrency(month.collectedInCents)} coletado</title></rect>
+                <rect fill="#4f8bd6" height={depositedHeight} rx="3" width="13" x={center - 6} y={baseline - depositedHeight}><title>{month.label}: {formatCurrency(month.depositedInCents)} depositado</title></rect>
+                <rect fill="#d99a38" height={expensesHeight} rx="3" width="13" x={center + 9} y={baseline - expensesHeight}><title>{month.label}: {formatCurrency(month.expensesInCents)} em despesas</title></rect>
                 <text fill="var(--muted)" fontSize="9" textAnchor="middle" x={center} y="236">{month.label}</text>
               </g>
             );
@@ -65,17 +68,37 @@ function LegendRow({ color, label, value }: { color: string; label: string; valu
   return <div className="flex items-center gap-2.5"><i className={`size-2.5 rounded-sm ${color}`} /><span className="flex-1 text-xs text-muted">{label}</span><strong className="text-xs text-foreground">{formatCurrency(value)}</strong></div>;
 }
 
-export function ChurchRankingChart({ churches }: { churches: ReportChurch[] }) {
-  const maximum = Math.max(1, ...churches.map((church) => church.collectedInCents));
+export function ChurchRankingChart({ churches, mode = "collections" }: { churches: ReportChurch[]; mode?: "collections" | "expenses" }) {
+  const maximum = Math.max(1, ...churches.map((church) => mode === "expenses" ? church.expensesInCents : church.collectedInCents));
   return (
     <div className="space-y-4">
       {churches.slice(0, 8).map((church, index) => (
         <div key={church.churchId}>
-          <div className="mb-1.5 flex items-center gap-3 text-xs"><span className="w-5 text-muted">{index + 1}.</span><span className="min-w-0 flex-1 truncate font-medium text-foreground">{church.churchName}</span><strong className="text-foreground">{formatCurrency(church.collectedInCents)}</strong></div>
-          <div className="ml-8 h-1.5 overflow-hidden rounded-full bg-surface-subtle"><div className="h-full rounded-full bg-brand" style={{ width: `${(church.collectedInCents / maximum) * 100}%` }} /></div>
+          <div className="mb-1.5 flex items-center gap-3 text-xs"><span className="w-5 text-muted">{index + 1}.</span><span className="min-w-0 flex-1 truncate font-medium text-foreground">{church.churchName}</span><strong className="text-foreground">{formatCurrency(mode === "expenses" ? church.expensesInCents : church.collectedInCents)}</strong></div>
+          <div className="ml-8 h-1.5 overflow-hidden rounded-full bg-surface-subtle"><div className={`h-full rounded-full ${mode === "expenses" ? "bg-[#d99a38]" : "bg-brand"}`} style={{ width: `${((mode === "expenses" ? church.expensesInCents : church.collectedInCents) / maximum) * 100}%` }} /></div>
         </div>
       ))}
       {churches.length === 0 && <p className="py-10 text-center text-sm text-muted">Nenhuma igreja no escopo selecionado.</p>}
+    </div>
+  );
+}
+
+export function ExpenseCategoryChart({ expenses }: { expenses: ExpenseReportRow[] }) {
+  const categories = Object.entries(expenses.reduce<Record<string, number>>((result, expense) => {
+    result[expense.category] = (result[expense.category] ?? 0) + expense.amountInCents;
+    return result;
+  }, {})).sort((a, b) => b[1] - a[1]);
+  const maximum = Math.max(1, ...categories.map(([, value]) => value));
+
+  return (
+    <div className="space-y-4">
+      {categories.slice(0, 8).map(([category, value]) => (
+        <div key={category}>
+          <div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className="truncate font-medium text-foreground">{category}</span><strong className="text-foreground">{formatCurrency(value)}</strong></div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-surface-subtle"><div className="h-full rounded-full bg-[#d99a38]" style={{ width: `${(value / maximum) * 100}%` }} /></div>
+        </div>
+      ))}
+      {categories.length === 0 && <p className="py-10 text-center text-sm text-muted">Nenhuma despesa no período.</p>}
     </div>
   );
 }

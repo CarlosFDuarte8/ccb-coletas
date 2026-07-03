@@ -53,17 +53,17 @@ export function SearchableSelect({ options, value, defaultValue, name, placehold
         aria-autocomplete="list"
         aria-controls={listId}
         aria-expanded={open}
-        className="form-control pl-9 pr-9"
+        className="form-control search-select-control"
         onChange={(event) => {
           setQuery(event.target.value);
           setOpen(true);
           if (!controlled) setInternalValue("");
           onChange?.("");
         }}
-        onFocus={(event) => { setQuery(selected?.label ?? query); setOpen(true); event.currentTarget.select(); }}
+        onFocus={() => { setQuery(""); setOpen(true); }}
         placeholder={placeholder}
         role="combobox"
-        value={query}
+        value={open ? query : selected?.label ?? query}
       />
       <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
       {open && (

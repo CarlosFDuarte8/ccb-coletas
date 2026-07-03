@@ -12,6 +12,7 @@ import {
   HomeIcon,
   PackageIcon,
   RouteIcon,
+  ReceiptIcon,
   SettingsIcon,
   UsersIcon,
 } from "@/components/icons";
@@ -24,6 +25,7 @@ const icons = {
   users: UsersIcon,
   chart: ChartIcon,
   building: BuildingIcon,
+  receipt: ReceiptIcon,
 };
 
 type SidebarProps = {

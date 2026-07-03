@@ -61,3 +61,7 @@ Cada igreja possui sua própria programação semanal de cultos e RJM. Exceçõe
 Na tela de igrejas, os cadastros são agrupados por setor. Inclusões e edições acontecem em modal, e cada card oferece acesso à programação específica daquela igreja.
 
 Na competência mensal, as coletas previstas são calculadas automaticamente a partir dessa programação. Datas canceladas por exceção não aparecem, alterações como Santa Ceia recebem o nome correto e o lançamento financeiro só é criado quando um valor real é informado.
+
+As despesas são registradas separadamente por igreja e mês de referência, com vencimento e pagamento independentes, além de categoria, favorecido e documento. Os relatórios consolidam arrecadação, depósitos, despesas, resultado líquido e conciliação sem misturar os conceitos contábeis.
+
+Em **Configurações**, o banco local pode ser exportado ou importado em JSON. A opção de mesclagem normaliza nomes e remapeia relacionamentos para adicionar apenas igrejas e lançamentos ausentes, preservando os cadastros existentes.

@@ -118,8 +118,27 @@ export type ScheduleException = {
   updatedAt: string;
 };
 
+export type Expense = {
+  id: EntityId;
+  churchId: EntityId;
+  competency: string;
+  dueDate: string;
+  paymentDate: string;
+  status: "pending" | "paid";
+  paymentMethod: "automatic_debit" | "pix" | "bank_slip" | "cash" | "transfer" | "other" | "not_informed";
+  description: string;
+  category: string;
+  amountInCents: number;
+  payee: string;
+  documentNumber: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type AppDatabase = {
-  version: 3;
+  version: 8;
+  appliedSeeds: string[];
   sectors: Sector[];
   churches: Church[];
   collections: Collection[];
@@ -127,6 +146,7 @@ export type AppDatabase = {
   competencies: MonthlyCompetency[];
   serviceSchedules: ServiceSchedule[];
   scheduleExceptions: ScheduleException[];
+  expenses: Expense[];
 };
 
 export type NewCollection = Omit<Collection, "id" | "createdAt" | "updatedAt">;
@@ -134,4 +154,5 @@ export type NewDeposit = Omit<Deposit, "id" | "createdAt" | "updatedAt">;
 export type DepositUpdate = Pick<Deposit, "date" | "transactionNumber" | "amountInCents" | "denominationCounts" | "notes">;
 export type ServiceScheduleInput = Pick<ServiceSchedule, "churchId" | "weekday" | "time" | "meetingType" | "title" | "active">;
 export type ScheduleExceptionInput = Pick<ScheduleException, "churchId" | "date" | "description" | "overrides">;
+export type NewExpense = Omit<Expense, "id" | "createdAt" | "updatedAt">;
 export type ChurchUpdate = Pick<Church, "name" | "code" | "sectorId" | "address" | "latitude" | "longitude" | "contacts">;

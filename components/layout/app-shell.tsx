@@ -4,13 +4,14 @@ import { useState } from "react";
 import { Footer } from "./footer";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
+import { ChurchSelectionProvider } from "@/components/churches/church-selection-provider";
 
 export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
+    <ChurchSelectionProvider><div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
       <Sidebar
         collapsed={collapsed}
         mobileOpen={mobileOpen}
@@ -23,6 +24,6 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
         <main className="min-w-0 flex-1">{children}</main>
         <Footer />
       </div>
-    </div>
+    </div></ChurchSelectionProvider>
   );
 }

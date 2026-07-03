@@ -432,6 +432,11 @@ button:not(:disabled),
   animation: menu-in 120ms ease-out;
 }
 
+.form-control.search-select-control {
+  padding-left: 2.5rem;
+  padding-right: 2.5rem;
+}
+
 .search-select-option {
   display: flex;
   width: 100%;

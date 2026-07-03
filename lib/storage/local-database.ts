@@ -4,10 +4,12 @@ import type {
   Deposit,
   DepositUpdate,
   NewCollection,
+  NewExpense,
   ScheduleExceptionInput,
   ServiceScheduleInput,
 } from "@/lib/domain/types";
 import { seedDatabase } from "./seed";
+import { mergeDatabases, type ImportSummary } from "./database-import";
 
 const STORAGE_KEY = "ccb-coletas:database:v1";
 
@@ -24,11 +26,38 @@ function createId(prefix: string) {
 
 function migrateDatabase(stored: Partial<AppDatabase> & { deposits?: Partial<Deposit>[] }): AppDatabase {
   const fallback = cloneSeed();
-  const isLegacy = stored.version !== 3;
+  const storedChurches = stored.churches ?? fallback.churches;
+  const appliedSeeds = stored.appliedSeeds ?? [];
+  const shouldAddMockData = !appliedSeeds.includes("utility-expenses-2026");
+  const churches = shouldAddMockData
+    ? [...storedChurches, ...fallback.churches.filter((seedChurch) => !storedChurches.some((church) => church.name.toLocaleLowerCase("pt-BR") === seedChurch.name.toLocaleLowerCase("pt-BR")))]
+    : storedChurches;
+  const migratedExpenses = (stored.expenses ?? []).map((expense) => {
+    const legacy = expense as typeof expense & { date?: string; dueDate?: string; paymentDate?: string; status?: "pending" | "paid"; paymentMethod?: typeof expense.paymentMethod };
+    const previousDate = legacy.date ?? "";
+    return {
+      ...expense,
+      dueDate: legacy.dueDate ?? previousDate,
+      paymentDate: legacy.paymentDate ?? previousDate,
+      status: legacy.status ?? "paid",
+      paymentMethod: legacy.paymentMethod ?? "not_informed",
+    };
+  });
+  const mockExpenses = shouldAddMockData ? fallback.expenses.map((expense) => {
+    const seedChurchName = fallback.churches.find((church) => church.id === expense.churchId)?.name;
+    const actualChurch = churches.find((church) => church.name.toLocaleLowerCase("pt-BR") === seedChurchName?.toLocaleLowerCase("pt-BR"));
+    return { ...expense, churchId: actualChurch?.id ?? expense.churchId };
+  }).filter((mock) => !migratedExpenses.some((expense) =>
+    expense.churchId === mock.churchId
+    && expense.competency === mock.competency
+    && expense.category === mock.category
+    && expense.amountInCents === mock.amountInCents,
+  )) : [];
   return {
-    version: 3,
+    version: 8,
+    appliedSeeds: shouldAddMockData ? [...appliedSeeds, "utility-expenses-2026"] : appliedSeeds,
     sectors: stored.sectors ?? fallback.sectors,
-    churches: stored.churches ?? fallback.churches,
+    churches,
     collections: stored.collections ?? [],
     deposits: (stored.deposits ?? []).map((deposit) => ({
       ...deposit,
@@ -36,8 +65,9 @@ function migrateDatabase(stored: Partial<AppDatabase> & { deposits?: Partial<Dep
       confirmedAt: deposit.confirmedAt ?? deposit.createdAt ?? null,
     })) as Deposit[],
     competencies: stored.competencies ?? [],
-    serviceSchedules: isLegacy ? fallback.serviceSchedules : (stored.serviceSchedules ?? []),
-    scheduleExceptions: isLegacy ? fallback.scheduleExceptions : (stored.scheduleExceptions ?? []),
+    serviceSchedules: stored.serviceSchedules ?? fallback.serviceSchedules,
+    scheduleExceptions: stored.scheduleExceptions ?? fallback.scheduleExceptions,
+    expenses: [...migratedExpenses, ...mockExpenses],
   };
 }
 
@@ -69,10 +99,30 @@ class LocalDatabase {
     if (typeof window === "undefined") return;
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (!stored || JSON.parse(stored).version !== 3) this.persist(this.getSnapshot());
+      if (!stored || JSON.parse(stored).version !== 8) this.persist(this.getSnapshot());
     } catch {
       this.persist(this.getSnapshot());
     }
+  }
+
+  importDatabase(input: Partial<AppDatabase>, mode: "merge" | "replace"): ImportSummary {
+    const normalized = migrateDatabase(input);
+    if (mode === "replace") {
+      this.persist(normalized);
+      return {
+        sectors: normalized.sectors.length,
+        churches: normalized.churches.length,
+        collections: normalized.collections.length,
+        deposits: normalized.deposits.length,
+        expenses: normalized.expenses.length,
+        schedules: normalized.serviceSchedules.length,
+        skipped: 0,
+        repaired: 0,
+      };
+    }
+    const merged = mergeDatabases(this.getSnapshot(), normalized);
+    this.persist(merged.database);
+    return merged.summary;
   }
 
   addCollection(input: NewCollection) {
@@ -176,6 +226,27 @@ class LocalDatabase {
       const deposit = database.deposits.find((item) => item.id === id);
       if (deposit) this.assertOpen(database, deposit.churchId, deposit.competency);
       return { ...database, deposits: database.deposits.filter((item) => item.id !== id) };
+    });
+  }
+
+  addExpense(input: NewExpense) {
+    const now = new Date().toISOString();
+    this.update((database) => ({
+      ...database,
+      expenses: [...database.expenses, { ...input, id: createId("expense"), createdAt: now, updatedAt: now }],
+    }));
+  }
+
+  updateExpense(id: string, input: NewExpense) {
+    const now = new Date().toISOString();
+    this.update((database) => {
+      return { ...database, expenses: database.expenses.map((expense) => expense.id === id ? { ...expense, ...input, updatedAt: now } : expense) };
+    });
+  }
+
+  removeExpense(id: string) {
+    this.update((database) => {
+      return { ...database, expenses: database.expenses.filter((item) => item.id !== id) };
     });
   }
 

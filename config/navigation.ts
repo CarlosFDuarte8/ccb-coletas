@@ -1,12 +1,13 @@
 export type NavigationItem = {
   label: string;
   href: string;
-  icon: "home" | "package" | "calendar" | "route" | "users" | "chart" | "building";
+  icon: "home" | "package" | "calendar" | "route" | "users" | "chart" | "building" | "receipt";
 };
 
 export const mainNavigation: NavigationItem[] = [
   { label: "Visão geral", href: "/", icon: "home" },
   { label: "Coletas", href: "/coletas", icon: "package" },
+  { label: "Despesas", href: "/despesas", icon: "receipt" },
   { label: "Agenda", href: "/agenda", icon: "calendar" },
   { label: "Rotas", href: "/rotas", icon: "route" },
 ];

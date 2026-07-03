@@ -15,10 +15,6 @@ const sections = {
     title: "Equipes",
     description: "Organize responsáveis, permissões e disponibilidade.",
   },
-  configuracoes: {
-    title: "Configurações",
-    description: "Personalize os dados e preferências do sistema.",
-  },
 } as const;
 
 type Section = keyof typeof sections;

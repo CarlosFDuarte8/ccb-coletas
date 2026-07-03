@@ -1,12 +1,14 @@
-import type { AppDatabase, Collection, Deposit } from "@/lib/domain/types";
+import type { AppDatabase, Collection, Deposit, Expense } from "@/lib/domain/types";
 
 export type ReportScope = "general" | "sector" | "church";
+export type ReportContent = "complete" | "collections" | "expenses";
 
 export type ReportFilters = {
   scope: ReportScope;
   scopeId: string;
   from: string;
   to: string;
+  content: ReportContent;
 };
 
 export type ReportMonth = {
@@ -21,6 +23,11 @@ export type ReportMonth = {
   rjmInCents: number;
   collectionsCount: number;
   zeroCollectionsCount: number;
+  expensesInCents: number;
+  netResultInCents: number;
+  paidExpensesInCents: number;
+  pendingExpensesInCents: number;
+  expensesCount: number;
 };
 
 export type ReportChurch = {
@@ -31,6 +38,8 @@ export type ReportChurch = {
   collectedInCents: number;
   depositedInCents: number;
   balanceInCents: number;
+  expensesInCents: number;
+  netResultInCents: number;
 };
 
 export type CollectionReportRow = Collection & {
@@ -45,6 +54,12 @@ export type DepositReportRow = Deposit & {
   sectorName: string;
 };
 
+export type ExpenseReportRow = Expense & {
+  churchName: string;
+  churchCode: string;
+  sectorName: string;
+};
+
 export type ReportData = {
   filters: ReportFilters;
   scopeLabel: string;
@@ -52,6 +67,7 @@ export type ReportData = {
   churches: ReportChurch[];
   collections: CollectionReportRow[];
   deposits: DepositReportRow[];
+  expenses: ExpenseReportRow[];
   totals: {
     collectedInCents: number;
     depositedInCents: number;
@@ -63,6 +79,12 @@ export type ReportData = {
     collectionsCount: number;
     zeroCollectionsCount: number;
     averagePerMonthInCents: number;
+    expensesInCents: number;
+    netResultInCents: number;
+    paidExpensesInCents: number;
+    pendingExpensesInCents: number;
+    paidExpensesCount: number;
+    pendingExpensesCount: number;
   };
 };
 
@@ -89,6 +111,8 @@ function monthLabel(competency: string) {
 }
 
 export function buildReport(database: AppDatabase, filters: ReportFilters): ReportData {
+  const includeCollections = filters.content !== "expenses";
+  const includeExpenses = filters.content !== "collections";
   const selectedChurchIds = database.churches
     .filter((church) => {
       if (filters.scope === "church") return church.id === filters.scopeId;
@@ -105,19 +129,25 @@ export function buildReport(database: AppDatabase, filters: ReportFilters): Repo
   }));
 
   const collections = database.collections
-    .filter((collection) => selectedIds.has(collection.churchId) && competencySet.has(collection.competency))
+    .filter((collection) => includeCollections && selectedIds.has(collection.churchId) && competencySet.has(collection.competency))
     .map((collection) => ({ ...collection, ...churchDetails.get(collection.churchId)! }))
     .sort((a, b) => a.date.localeCompare(b.date));
   const deposits = database.deposits
-    .filter((deposit) => deposit.status === "confirmed" && selectedIds.has(deposit.churchId) && competencySet.has(deposit.competency))
+    .filter((deposit) => includeCollections && deposit.status === "confirmed" && selectedIds.has(deposit.churchId) && competencySet.has(deposit.competency))
     .map((deposit) => ({ ...deposit, ...churchDetails.get(deposit.churchId)! }))
     .sort((a, b) => a.date.localeCompare(b.date));
+  const expenses = database.expenses
+    .filter((expense) => includeExpenses && selectedIds.has(expense.churchId) && competencySet.has(expense.competency))
+    .map((expense) => ({ ...expense, ...churchDetails.get(expense.churchId)! }))
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
   const months = competencies.map((competency): ReportMonth => {
     const monthCollections = collections.filter((collection) => collection.competency === competency);
     const monthDeposits = deposits.filter((deposit) => deposit.competency === competency);
     const collectedInCents = monthCollections.reduce((sum, item) => sum + item.amountInCents, 0);
     const depositedInCents = monthDeposits.reduce((sum, item) => sum + item.amountInCents, 0);
+    const expensesInCents = expenses.filter((expense) => expense.competency === competency).reduce((sum, item) => sum + item.amountInCents, 0);
+    const monthExpenses = expenses.filter((expense) => expense.competency === competency);
     return {
       competency,
       label: monthLabel(competency),
@@ -130,6 +160,11 @@ export function buildReport(database: AppDatabase, filters: ReportFilters): Repo
       rjmInCents: monthCollections.filter((item) => item.meetingType === "rjm").reduce((sum, item) => sum + item.amountInCents, 0),
       collectionsCount: monthCollections.length,
       zeroCollectionsCount: monthCollections.filter((item) => item.amountInCents === 0).length,
+      expensesInCents,
+      netResultInCents: collectedInCents - expensesInCents,
+      paidExpensesInCents: monthExpenses.filter((item) => item.status === "paid").reduce((sum, item) => sum + item.amountInCents, 0),
+      pendingExpensesInCents: monthExpenses.filter((item) => item.status === "pending").reduce((sum, item) => sum + item.amountInCents, 0),
+      expensesCount: monthExpenses.length,
     };
   });
 
@@ -138,6 +173,7 @@ export function buildReport(database: AppDatabase, filters: ReportFilters): Repo
     .map((church): ReportChurch => {
       const collectedInCents = collections.filter((item) => item.churchId === church.id).reduce((sum, item) => sum + item.amountInCents, 0);
       const depositedInCents = deposits.filter((item) => item.churchId === church.id).reduce((sum, item) => sum + item.amountInCents, 0);
+      const expensesInCents = expenses.filter((item) => item.churchId === church.id).reduce((sum, item) => sum + item.amountInCents, 0);
       return {
         churchId: church.id,
         churchName: church.name,
@@ -146,12 +182,15 @@ export function buildReport(database: AppDatabase, filters: ReportFilters): Repo
         collectedInCents,
         depositedInCents,
         balanceInCents: collectedInCents - depositedInCents,
+        expensesInCents,
+        netResultInCents: collectedInCents - expensesInCents,
       };
     })
-    .sort((a, b) => b.collectedInCents - a.collectedInCents);
+    .sort((a, b) => filters.content === "expenses" ? b.expensesInCents - a.expensesInCents : b.collectedInCents - a.collectedInCents);
 
   const collectedInCents = months.reduce((sum, item) => sum + item.collectedInCents, 0);
   const depositedInCents = months.reduce((sum, item) => sum + item.depositedInCents, 0);
+  const expensesInCents = months.reduce((sum, item) => sum + item.expensesInCents, 0);
   const sector = database.sectors.find((item) => item.id === filters.scopeId);
   const church = database.churches.find((item) => item.id === filters.scopeId);
   const scopeLabel = filters.scope === "sector" ? `Setor ${sector?.name ?? "não selecionado"}` : filters.scope === "church" ? `${church?.name ?? "Igreja não selecionada"} · ${church?.code ?? ""}` : "Todas as igrejas";
@@ -163,6 +202,7 @@ export function buildReport(database: AppDatabase, filters: ReportFilters): Repo
     churches,
     collections,
     deposits,
+    expenses,
     totals: {
       collectedInCents,
       depositedInCents,
@@ -174,6 +214,12 @@ export function buildReport(database: AppDatabase, filters: ReportFilters): Repo
       collectionsCount: collections.length,
       zeroCollectionsCount: collections.filter((item) => item.amountInCents === 0).length,
       averagePerMonthInCents: months.length ? Math.round(collectedInCents / months.length) : 0,
+      expensesInCents,
+      netResultInCents: collectedInCents - expensesInCents,
+      paidExpensesInCents: expenses.filter((item) => item.status === "paid").reduce((sum, item) => sum + item.amountInCents, 0),
+      pendingExpensesInCents: expenses.filter((item) => item.status === "pending").reduce((sum, item) => sum + item.amountInCents, 0),
+      paidExpensesCount: expenses.filter((item) => item.status === "paid").length,
+      pendingExpensesCount: expenses.filter((item) => item.status === "pending").length,
     },
   };
 }

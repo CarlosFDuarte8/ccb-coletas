@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { BanknoteIcon, BuildingIcon, ChartIcon, DownloadIcon, PackageIcon, ReceiptIcon } from "@/components/icons";
-import { ChurchRankingChart, DistributionChart, EvolutionChart } from "@/components/reports/charts";
+import { ChurchRankingChart, DistributionChart, EvolutionChart, ExpenseCategoryChart } from "@/components/reports/charts";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useDatabase } from "@/hooks/use-database";
 import { formatCurrency } from "@/lib/domain/money";
 import { exportReportCsv, exportReportExcel, exportReportPdf } from "@/lib/reports/export";
-import { buildReport, type ReportScope } from "@/lib/reports/report";
+import { buildReport, type ReportContent, type ReportScope } from "@/lib/reports/report";
 
 type Exporting = "pdf" | "excel" | "csv" | null;
 
@@ -22,14 +22,15 @@ export default function ReportsPage() {
   const database = useDatabase();
   const initialPeriod = defaultPeriod();
   const [scope, setScope] = useState<ReportScope>("general");
+  const [content, setContent] = useState<ReportContent>("complete");
   const [scopeId, setScopeId] = useState("");
   const [from, setFrom] = useState(initialPeriod.from);
   const [to, setTo] = useState(initialPeriod.to);
   const [exporting, setExporting] = useState<Exporting>(null);
   const [exportError, setExportError] = useState("");
   const invalidPeriod = from > to;
-  const report = useMemo(() => buildReport(database, { scope, scopeId, from, to }), [database, scope, scopeId, from, to]);
-  const hasData = report.collections.length > 0 || report.deposits.length > 0;
+  const report = useMemo(() => buildReport(database, { scope, scopeId, from, to, content }), [database, scope, scopeId, from, to, content]);
+  const hasData = report.collections.length > 0 || report.deposits.length > 0 || report.expenses.length > 0;
 
   function changeScope(nextScope: ReportScope) {
     setScope(nextScope);
@@ -63,7 +64,8 @@ export default function ReportsPage() {
       {exportError && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-medium text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">{exportError}</p>}
 
       <section className="panel p-4 sm:p-5">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <label className="field-label">Conteúdo<select className="form-control" onChange={(event) => setContent(event.target.value as ReportContent)} value={content}><option value="complete">Completo</option><option value="collections">Coletas e depósitos</option><option value="expenses">Somente despesas</option></select></label>
           <label className="field-label">Visualizar por<select className="form-control" onChange={(event) => changeScope(event.target.value as ReportScope)} value={scope}><option value="general">Visão geral</option><option value="sector">Setor</option><option value="church">Igreja</option></select></label>
           {scope === "sector" && <label className="field-label">Setor<SearchableSelect onChange={(value) => { if (value) setScopeId(value); }} options={database.sectors.map((sector) => ({ value: sector.id, label: sector.name, description: `${database.churches.filter((church) => church.sectorId === sector.id).length} igreja(s)` }))} placeholder="Buscar setor..." value={scopeId} /></label>}
           {scope === "church" && <label className="field-label">Igreja<SearchableSelect onChange={(value) => { if (value) setScopeId(value); }} options={database.churches.map((church) => ({ value: church.id, label: church.name, description: `${church.code} · ${database.sectors.find((sector) => sector.id === church.sectorId)?.name}` }))} placeholder="Buscar igreja..." value={scopeId} /></label>}
@@ -74,22 +76,29 @@ export default function ReportsPage() {
         {invalidPeriod && <p className="mt-3 text-xs font-medium text-red-600 dark:text-red-400">A competência inicial não pode ser posterior à final.</p>}
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard detail={`${report.totals.collectionsCount} coletas`} icon={PackageIcon} label="Total coletado" tone="brand" value={formatCurrency(report.totals.collectedInCents)} />
-        <MetricCard detail={`${report.deposits.length} comprovantes`} icon={BanknoteIcon} label="Total depositado" tone="blue" value={formatCurrency(report.totals.depositedInCents)} />
-        <MetricCard detail="Diferença no período" icon={ReceiptIcon} label="Saldo" tone={report.totals.balanceInCents === 0 ? "green" : "amber"} value={formatCurrency(report.totals.balanceInCents)} />
-        <MetricCard detail={`${report.totals.zeroCollectionsCount} sem arrecadação`} icon={ChartIcon} label="Média mensal" tone="green" value={formatCurrency(report.totals.averagePerMonthInCents)} />
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {content !== "expenses" && <MetricCard detail={`${report.totals.collectionsCount} coletas`} icon={PackageIcon} label="Total coletado" tone="brand" value={formatCurrency(report.totals.collectedInCents)} />}
+        {content !== "collections" && <MetricCard detail={`${report.expenses.length} lançamentos`} icon={ReceiptIcon} label="Total de despesas" tone="amber" value={formatCurrency(report.totals.expensesInCents)} />}
+        {content === "complete" && <MetricCard detail="Coletado menos despesas" icon={ChartIcon} label="Resultado líquido" tone={report.totals.netResultInCents >= 0 ? "green" : "amber"} value={formatCurrency(report.totals.netResultInCents)} />}
+        {content !== "expenses" && <MetricCard detail={`${report.deposits.length} comprovantes`} icon={BanknoteIcon} label="Total depositado" tone="blue" value={formatCurrency(report.totals.depositedInCents)} />}
+        {content !== "expenses" && <MetricCard detail="Coletado menos depositado" icon={BuildingIcon} label="A depositar" tone={report.totals.balanceInCents === 0 ? "green" : "amber"} value={formatCurrency(report.totals.balanceInCents)} />}
+        {content === "collections" && <MetricCard detail={`${report.totals.zeroCollectionsCount} sem arrecadação`} icon={ChartIcon} label="Média mensal" tone="green" value={formatCurrency(report.totals.averagePerMonthInCents)} />}
+        {content === "expenses" && <MetricCard detail={`${report.totals.paidExpensesCount} conta(s)`} icon={ChartIcon} label="Total pago" tone="green" value={formatCurrency(report.totals.paidExpensesInCents)} />}
+        {content === "expenses" && <MetricCard detail={`${report.totals.pendingExpensesCount} conta(s)`} icon={BanknoteIcon} label="Total pendente" tone="blue" value={formatCurrency(report.totals.pendingExpensesInCents)} />}
+        {content === "expenses" && <MetricCard detail="Média por competência" icon={BuildingIcon} label="Média mensal" tone="brand" value={formatCurrency(report.months.length ? Math.round(report.totals.expensesInCents / report.months.length) : 0)} />}
       </section>
 
       <section className="grid gap-4 2xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
-        <article className="panel p-4 sm:p-5"><div className="mb-5"><h2 className="panel-title">Evolução mensal</h2><p className="panel-description">Coletado e depositado por competência</p></div><EvolutionChart months={report.months} /></article>
-        <article className="panel p-4 sm:p-5"><div className="mb-5"><h2 className="panel-title">Composição das coletas</h2><p className="panel-description">Normal, especial, cultos e RJM</p></div><DistributionChart cultoInCents={report.totals.cultoInCents} normalInCents={report.totals.normalInCents} rjmInCents={report.totals.rjmInCents} specialInCents={report.totals.specialInCents} /></article>
+        <article className="panel p-4 sm:p-5"><div className="mb-5"><h2 className="panel-title">Evolução mensal</h2><p className="panel-description">Coletado, depositado e despesas por competência</p></div><EvolutionChart months={report.months} /></article>
+        {content !== "expenses" ? <article className="panel p-4 sm:p-5"><div className="mb-5"><h2 className="panel-title">Composição das coletas</h2><p className="panel-description">Normal, especial, cultos e RJM</p></div><DistributionChart cultoInCents={report.totals.cultoInCents} normalInCents={report.totals.normalInCents} rjmInCents={report.totals.rjmInCents} specialInCents={report.totals.specialInCents} /></article> : <article className="panel p-4 sm:p-5"><div className="mb-5"><h2 className="panel-title">Despesas por categoria</h2><p className="panel-description">Maiores grupos de saída no período</p></div><ExpenseCategoryChart expenses={report.expenses} /></article>}
       </section>
 
       <section className="grid items-start gap-4 xl:grid-cols-2">
-        <article className="panel p-4 sm:p-5"><div className="mb-5"><h2 className="panel-title">Ranking por igreja</h2><p className="panel-description">Arrecadação dentro do escopo selecionado</p></div><ChurchRankingChart churches={report.churches} /></article>
-        <article className="panel overflow-hidden"><div className="panel-header"><div><h2 className="panel-title">Resumo por competência</h2><p className="panel-description">Conferência dos números apresentados</p></div><span className="record-badge record-normal">{report.scopeLabel}</span></div><div className="overflow-x-auto"><table className="data-table min-w-[620px]"><thead><tr><th>Competência</th><th className="text-right">Coletado</th><th className="text-right">Depositado</th><th className="text-right">Saldo</th><th className="text-right">Coletas</th></tr></thead><tbody>{report.months.map((month) => <tr key={month.competency}><td className="font-medium text-foreground">{month.label}</td><td className="text-right">{formatCurrency(month.collectedInCents)}</td><td className="text-right">{formatCurrency(month.depositedInCents)}</td><td className="text-right font-semibold text-foreground">{formatCurrency(month.balanceInCents)}</td><td className="text-right">{month.collectionsCount}</td></tr>)}</tbody></table></div></article>
+        <article className="panel p-4 sm:p-5"><div className="mb-5"><h2 className="panel-title">Ranking por igreja</h2><p className="panel-description">{content === "expenses" ? "Despesas" : "Arrecadação"} dentro do escopo selecionado</p></div><ChurchRankingChart churches={report.churches} mode={content === "expenses" ? "expenses" : "collections"} /></article>
+        {content === "complete" && <article className="panel p-4 sm:p-5"><div className="mb-5"><h2 className="panel-title">Despesas por categoria</h2><p className="panel-description">Maiores grupos de saída no período</p></div><ExpenseCategoryChart expenses={report.expenses} /></article>}
       </section>
+
+      <article className="panel overflow-hidden"><div className="panel-header"><div><h2 className="panel-title">Resumo por competência</h2><p className="panel-description">Conferência dos números apresentados</p></div><span className="record-badge record-normal">{report.scopeLabel}</span></div><div className="overflow-x-auto">{content === "expenses" ? <table className="data-table min-w-[620px]"><thead><tr><th>Referência</th><th className="text-right">Despesas</th><th className="text-right">Pago</th><th className="text-right">Pendente</th><th className="text-right">Contas</th></tr></thead><tbody>{report.months.map((month) => <tr key={month.competency}><td className="font-medium text-foreground">{month.label}</td><td className="text-right font-semibold text-foreground">{formatCurrency(month.expensesInCents)}</td><td className="text-right">{formatCurrency(month.paidExpensesInCents)}</td><td className="text-right">{formatCurrency(month.pendingExpensesInCents)}</td><td className="text-right">{month.expensesCount}</td></tr>)}</tbody></table> : <table className="data-table min-w-[850px]"><thead><tr><th>Competência</th><th className="text-right">Coletado</th>{content === "complete" && <><th className="text-right">Despesas</th><th className="text-right">Resultado</th></>}<th className="text-right">Depositado</th><th className="text-right">A depositar</th><th className="text-right">Coletas</th></tr></thead><tbody>{report.months.map((month) => <tr key={month.competency}><td className="font-medium text-foreground">{month.label}</td><td className="text-right">{formatCurrency(month.collectedInCents)}</td>{content === "complete" && <><td className="text-right">{formatCurrency(month.expensesInCents)}</td><td className="text-right font-semibold text-foreground">{formatCurrency(month.netResultInCents)}</td></>}<td className="text-right">{formatCurrency(month.depositedInCents)}</td><td className="text-right">{formatCurrency(month.balanceInCents)}</td><td className="text-right">{month.collectionsCount}</td></tr>)}</tbody></table>}</div></article>
 
       {!hasData && !invalidPeriod && <div className="rounded-xl border border-dashed border-border p-8 text-center"><BuildingIcon className="mx-auto size-7 text-muted" /><p className="mt-3 text-sm font-medium text-foreground">Nenhum dado encontrado</p><p className="mt-1 text-xs text-muted">Altere o período ou o escopo do relatório.</p></div>}
     </div>
