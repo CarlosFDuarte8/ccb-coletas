@@ -17,22 +17,25 @@ type ChurchSelectionValue = {
 
 const ChurchSelectionContext = createContext<ChurchSelectionValue | null>(null);
 
-export function ChurchSelectionProvider({ children }: { children: React.ReactNode }) {
-  const database = useDatabase();
+export function ChurchSelectionProvider({ children, allowedChurchIds, userId }: { children: React.ReactNode; allowedChurchIds: string[] | null; userId: string }) {
+  const database = useDatabase(userId);
   const storedId = useSyncExternalStore(selectedChurchStore.subscribe, selectedChurchStore.getSnapshot, selectedChurchStore.getServerSnapshot);
   const storedCompetency = useSyncExternalStore(selectedCompetencyStore.subscribe, selectedCompetencyStore.getSnapshot, selectedCompetencyStore.getServerSnapshot);
-  const church = database.churches.find((item) => item.id === storedId) ?? database.churches[0];
+  const churches = allowedChurchIds === null
+    ? database.churches
+    : database.churches.filter((item) => allowedChurchIds.includes(item.id));
+  const church = churches.find((item) => item.id === storedId) ?? churches[0];
   const now = new Date();
   const defaultCompetency = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const competency = /^\d{4}-\d{2}$/.test(storedCompetency) ? storedCompetency : defaultCompetency;
   const value = useMemo(() => ({
     churchId: church?.id ?? "",
     church,
-    churches: database.churches,
+    churches,
     setChurchId: (churchId: string) => selectedChurchStore.set(churchId),
     competency,
     setCompetency: (competency: string) => selectedCompetencyStore.set(competency),
-  }), [church, database.churches, competency]);
+  }), [church, churches, competency]);
   return <ChurchSelectionContext.Provider value={value}>{children}</ChurchSelectionContext.Provider>;
 }
 

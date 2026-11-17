@@ -1,18 +1,18 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import { localDatabase } from "@/lib/storage/local-database";
+import { databaseStore } from "@/lib/storage/database-store";
 
-export function useDatabase() {
+export function useDatabase(userId?: string) {
   const database = useSyncExternalStore(
-    localDatabase.subscribe,
-    localDatabase.getSnapshot,
-    localDatabase.getServerSnapshot,
+    databaseStore.subscribe,
+    databaseStore.getSnapshot,
+    databaseStore.getServerSnapshot,
   );
 
   useEffect(() => {
-    localDatabase.initialize();
-  }, []);
+    void databaseStore.initialize(userId).catch(() => undefined);
+  }, [userId]);
 
   return database;
 }

@@ -36,6 +36,14 @@ export type Church = {
 export type MeetingType = "culto" | "rjm";
 export type CollectionType = "normal" | "especial";
 
+export type CollectionBreakdown = {
+  pietyInCents: number;
+  maintenanceInCents: number;
+  constructionInCents: number;
+  missionsInCents: number;
+  othersInCents: number;
+};
+
 export type Collection = {
   id: EntityId;
   churchId: EntityId;
@@ -47,6 +55,8 @@ export type Collection = {
   notes: string;
   serviceScheduleId?: EntityId;
   serviceTime?: string;
+  breakdown: CollectionBreakdown;
+  maintenanceCashInCents: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -125,6 +135,7 @@ export type Expense = {
   dueDate: string;
   paymentDate: string;
   status: "pending" | "paid";
+  paymentSource: "administration_account" | "maintenance_cash";
   paymentMethod: "automatic_debit" | "pix" | "bank_slip" | "cash" | "transfer" | "other" | "not_informed";
   description: string;
   category: string;

@@ -16,6 +16,7 @@ import {
   SettingsIcon,
   UsersIcon,
 } from "@/components/icons";
+import type { MenuKey } from "@/config/permissions";
 
 const icons = {
   home: HomeIcon,
@@ -29,6 +30,7 @@ const icons = {
 };
 
 type SidebarProps = {
+  allowedMenus: MenuKey[];
   collapsed: boolean;
   mobileOpen: boolean;
   onCollapse: () => void;
@@ -63,8 +65,10 @@ function NavigationGroup({ items, label, pathname, onNavigate }: { items: Naviga
   );
 }
 
-export function Sidebar({ collapsed, mobileOpen, onCollapse, onNavigate, onMobileClose }: SidebarProps) {
+export function Sidebar({ allowedMenus, collapsed, mobileOpen, onCollapse, onNavigate, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
+  const mainItems = mainNavigation.filter((item) => allowedMenus.includes(item.permission));
+  const managementItems = managementNavigation.filter((item) => allowedMenus.includes(item.permission));
 
   return (
     <>
@@ -82,15 +86,15 @@ export function Sidebar({ collapsed, mobileOpen, onCollapse, onNavigate, onMobil
         </div>
 
         <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 py-5">
-          <NavigationGroup items={mainNavigation} label="Operação" pathname={pathname} onNavigate={onNavigate} />
-          <NavigationGroup items={managementNavigation} label="Gestão" pathname={pathname} onNavigate={onNavigate} />
+          {mainItems.length > 0 && <NavigationGroup items={mainItems} label="Operação" pathname={pathname} onNavigate={onNavigate} />}
+          {managementItems.length > 0 && <NavigationGroup items={managementItems} label="Gestão" pathname={pathname} onNavigate={onNavigate} />}
         </div>
 
         <div className="border-t border-border p-3">
-          <Link className="sidebar-link" href="/configuracoes" onClick={onNavigate} title="Configurações">
+          {allowedMenus.includes("settings") && <Link className="sidebar-link" href="/configuracoes" onClick={onNavigate} title="Configurações">
             <SettingsIcon className="size-[19px] shrink-0" />
             <span className="sidebar-text truncate">Configurações</span>
-          </Link>
+          </Link>}
         </div>
 
         <button

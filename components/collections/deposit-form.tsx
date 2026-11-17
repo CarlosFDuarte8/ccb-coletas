@@ -5,7 +5,7 @@ import { BanknoteIcon, CheckCircleIcon } from "@/components/icons";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import type { Deposit } from "@/lib/domain/types";
 import { BRL_DENOMINATIONS_IN_CENTS, denominationLabel, formatCurrency } from "@/lib/domain/money";
-import { localDatabase } from "@/lib/storage/local-database";
+import { databaseStore } from "@/lib/storage/database-store";
 
 type DepositFormProps = {
   churchId: string;
@@ -54,10 +54,10 @@ export function DepositForm({ churchId, competency, deposit, onSuccess }: Deposi
     }
     try {
       if (deposit) {
-        if (shouldConfirm) localDatabase.confirmDeposit(deposit.id, values());
-        else localDatabase.updateDeposit(deposit.id, values());
+        if (shouldConfirm) databaseStore.confirmDeposit(deposit.id, values());
+        else databaseStore.updateDeposit(deposit.id, values());
       } else {
-        localDatabase.createDeposit(churchId, competency, values(), shouldConfirm);
+        databaseStore.createDeposit(churchId, competency, values(), shouldConfirm);
       }
       onSuccess();
     } catch (error) {

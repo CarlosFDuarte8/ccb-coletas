@@ -7,8 +7,8 @@ import { Modal } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useDatabase } from "@/hooks/use-database";
 import { formatCurrency } from "@/lib/domain/money";
-import { paymentMethodLabel } from "@/lib/domain/expense";
-import { localDatabase } from "@/lib/storage/local-database";
+import { paymentMethodLabel, paymentSourceLabel } from "@/lib/domain/expense";
+import { databaseStore } from "@/lib/storage/database-store";
 import { useChurchSelection } from "@/components/churches/church-selection-provider";
 
 function formatCompetency(competency: string) {
@@ -60,9 +60,9 @@ export default function ExpensesPage() {
 
       <article className="panel overflow-hidden">
         <div className="panel-header"><div><h2 className="panel-title">Lançamentos da competência</h2><p className="panel-description">Despesas de {church?.name} em {formatCompetency(competency)}</p></div><strong className="text-sm text-amber-700 dark:text-amber-400">{formatCurrency(total)}</strong></div>
-        <div className="overflow-x-auto"><table className="data-table min-w-[1080px]"><thead><tr><th>Vencimento</th><th>Pagamento</th><th>Status</th><th>Forma</th><th>Categoria</th><th>Descrição</th><th>Pago a</th><th>Documento</th><th className="text-right">Valor</th><th><span className="sr-only">Ações</span></th></tr></thead><tbody>
-          {expenses.map((expense) => <tr key={expense.id}><td>{formatDate(expense.dueDate)}</td><td>{formatDate(expense.paymentDate)}</td><td><span className={`record-badge ${expense.status === "paid" ? "record-confirmed" : expense.dueDate < today ? "record-especial" : "record-draft"}`}>{expense.status === "paid" ? "Paga" : expense.dueDate < today ? "Vencida" : "Pendente"}</span></td><td>{paymentMethodLabel(expense.paymentMethod)}</td><td>{expense.category}</td><td className="max-w-56 truncate font-medium text-foreground" title={expense.description}>{expense.description}</td><td>{expense.payee || "—"}</td><td className="font-mono text-xs">{expense.documentNumber || "—"}</td><td className="text-right font-semibold text-foreground">{formatCurrency(expense.amountInCents)}</td><td className="w-20"><div className="flex justify-end gap-1"><button aria-label="Editar despesa" className="icon-button size-8" onClick={() => setEditingId(expense.id)} title="Editar" type="button"><ArrowUpRightIcon className="size-4" /></button><button aria-label="Excluir despesa" className="icon-button size-8 hover:text-red-600" onClick={() => { if (window.confirm("Excluir esta despesa?")) localDatabase.removeExpense(expense.id); }} title="Excluir" type="button"><TrashIcon className="size-4" /></button></div></td></tr>)}
-          {expenses.length === 0 && <tr><td className="empty-cell" colSpan={10}>Nenhuma despesa registrada nesta referência.</td></tr>}
+        <div className="overflow-x-auto"><table className="data-table min-w-[1180px]"><thead><tr><th>Vencimento</th><th>Pagamento</th><th>Status</th><th>Origem</th><th>Forma</th><th>Categoria</th><th>Descrição</th><th>Pago a</th><th>Documento</th><th className="text-right">Valor</th><th><span className="sr-only">Ações</span></th></tr></thead><tbody>
+          {expenses.map((expense) => <tr key={expense.id}><td>{formatDate(expense.dueDate)}</td><td>{formatDate(expense.paymentDate)}</td><td><span className={`record-badge ${expense.status === "paid" ? "record-confirmed" : expense.dueDate < today ? "record-especial" : "record-draft"}`}>{expense.status === "paid" ? "Paga" : expense.dueDate < today ? "Vencida" : "Pendente"}</span></td><td>{paymentSourceLabel(expense.paymentSource)}</td><td>{paymentMethodLabel(expense.paymentMethod)}</td><td>{expense.category}</td><td className="max-w-56 truncate font-medium text-foreground" title={expense.description}>{expense.description}</td><td>{expense.payee || "—"}</td><td className="font-mono text-xs">{expense.documentNumber || "—"}</td><td className="text-right font-semibold text-foreground">{formatCurrency(expense.amountInCents)}</td><td className="w-20"><div className="flex justify-end gap-1"><button aria-label="Editar despesa" className="icon-button size-8" onClick={() => setEditingId(expense.id)} title="Editar" type="button"><ArrowUpRightIcon className="size-4" /></button><button aria-label="Excluir despesa" className="icon-button size-8 hover:text-red-600" onClick={() => { if (window.confirm("Excluir esta despesa?")) databaseStore.removeExpense(expense.id); }} title="Excluir" type="button"><TrashIcon className="size-4" /></button></div></td></tr>)}
+          {expenses.length === 0 && <tr><td className="empty-cell" colSpan={11}>Nenhuma despesa registrada nesta referência.</td></tr>}
         </tbody></table></div>
       </article>
 

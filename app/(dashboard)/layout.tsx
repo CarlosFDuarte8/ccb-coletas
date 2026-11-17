@@ -1,7 +1,9 @@
 import { AppShell } from "@/components/layout/app-shell";
+import { requireUser } from "@/lib/auth/current-user";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  return <AppShell>{children}</AppShell>;
+  const user = await requireUser();
+  return <AppShell user={user}>{children}</AppShell>;
 }

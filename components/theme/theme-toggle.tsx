@@ -16,16 +16,14 @@ function applyTheme(theme: Theme) {
   document.documentElement.classList.toggle("dark", isDark);
   document.documentElement.classList.toggle("light", !isDark);
   document.documentElement.dataset.theme = theme;
-  localStorage.setItem("ccb-theme", theme);
+  document.cookie = `ccb-theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax`;
   window.dispatchEvent(new Event("ccb-theme-change"));
 }
 
 function subscribeToTheme(callback: () => void) {
   window.addEventListener("ccb-theme-change", callback);
-  window.addEventListener("storage", callback);
   return () => {
     window.removeEventListener("ccb-theme-change", callback);
-    window.removeEventListener("storage", callback);
   };
 }
 

@@ -1,5 +1,10 @@
 import type { Expense } from "@/lib/domain/types";
 
+export const paymentSources: Array<{ value: Expense["paymentSource"]; label: string }> = [
+  { value: "administration_account", label: "Conta da administração" },
+  { value: "maintenance_cash", label: "Caixa de manutenção" },
+];
+
 export const paymentMethods: Array<{ value: Expense["paymentMethod"]; label: string }> = [
   { value: "automatic_debit", label: "Débito automático" },
   { value: "pix", label: "Pix" },
@@ -12,4 +17,8 @@ export const paymentMethods: Array<{ value: Expense["paymentMethod"]; label: str
 
 export function paymentMethodLabel(value: Expense["paymentMethod"]) {
   return paymentMethods.find((method) => method.value === value)?.label ?? "Não informado";
+}
+
+export function paymentSourceLabel(value: Expense["paymentSource"]) {
+  return paymentSources.find((source) => source.value === value)?.label ?? "Conta da administração";
 }

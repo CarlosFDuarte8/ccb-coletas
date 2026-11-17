@@ -5,7 +5,7 @@ import { ArrowUpRightIcon, CalendarIcon, ClockIcon, PlusIcon, TrashIcon } from "
 import { Modal } from "@/components/ui/modal";
 import { useDatabase } from "@/hooks/use-database";
 import type { ScheduleException, ScheduleOverride, ServiceSchedule } from "@/lib/domain/types";
-import { localDatabase } from "@/lib/storage/local-database";
+import { databaseStore } from "@/lib/storage/database-store";
 
 const weekdays = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
 
@@ -92,7 +92,7 @@ function ScheduleForm({ churchId, schedule, onClose }: { churchId: string; sched
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    localDatabase.saveServiceSchedule({
+    databaseStore.saveServiceSchedule({
       churchId,
       weekday: Number(form.get("weekday")),
       time: String(form.get("time")),
@@ -112,7 +112,7 @@ function ScheduleForm({ churchId, schedule, onClose }: { churchId: string; sched
         <label className="field-label">Nome<input className="form-control" defaultValue={schedule?.title ?? "Culto oficial"} name="title" required /></label>
       </div>
       <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-        {schedule ? <button className="button-ghost text-red-600" onClick={() => { if (window.confirm("Excluir este horário recorrente?")) { localDatabase.removeServiceSchedule(schedule.id); onClose(); } }} type="button"><TrashIcon className="size-4" /> Excluir</button> : <span />}
+        {schedule ? <button className="button-ghost text-red-600" onClick={() => { if (window.confirm("Excluir este horário recorrente?")) { databaseStore.removeServiceSchedule(schedule.id); onClose(); } }} type="button"><TrashIcon className="size-4" /> Excluir</button> : <span />}
         <button className="button-primary" type="submit">Salvar horário</button>
       </div>
     </form>
@@ -148,7 +148,7 @@ function ExceptionForm({ churchId, schedules, exception, onClose }: { churchId: 
       window.alert("Marque ao menos um culto como cancelado ou alterado.");
       return;
     }
-    localDatabase.saveScheduleException({ churchId, date, description: String(form.get("description")).trim(), overrides: normalized }, exception?.id);
+    databaseStore.saveScheduleException({ churchId, date, description: String(form.get("description")).trim(), overrides: normalized }, exception?.id);
     onClose();
   }
 
@@ -178,7 +178,7 @@ function ExceptionForm({ churchId, schedules, exception, onClose }: { churchId: 
         </div>
       </div>
       <div className="flex flex-col-reverse gap-2 p-4 sm:flex-row sm:justify-between sm:p-5">
-        {exception ? <button className="button-ghost text-red-600" onClick={() => { if (window.confirm("Excluir esta exceção?")) { localDatabase.removeScheduleException(exception.id); onClose(); } }} type="button"><TrashIcon className="size-4" /> Excluir exceção</button> : <span />}
+        {exception ? <button className="button-ghost text-red-600" onClick={() => { if (window.confirm("Excluir esta exceção?")) { databaseStore.removeScheduleException(exception.id); onClose(); } }} type="button"><TrashIcon className="size-4" /> Excluir exceção</button> : <span />}
         <button className="button-primary" type="submit">Salvar exceção</button>
       </div>
     </form>

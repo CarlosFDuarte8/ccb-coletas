@@ -117,7 +117,20 @@ export function mergeDatabases(current: AppDatabase, imported: AppDatabase): { d
     const duplicate = result.collections.some((item) => item.churchId === churchId && item.competency === collection.competency && item.date === collection.date && item.meetingType === collection.meetingType && item.collectionType === collection.collectionType && item.amountInCents === collection.amountInCents);
     if (duplicate) summary.skipped += 1;
     else {
-      result.collections.push({ ...collection, id: result.collections.some((item) => item.id === collection.id) ? newId("collection") : collection.id, churchId, serviceScheduleId: scheduleId });
+      result.collections.push({
+        ...collection,
+        id: result.collections.some((item) => item.id === collection.id) ? newId("collection") : collection.id,
+        churchId,
+        serviceScheduleId: scheduleId,
+        breakdown: collection.breakdown ?? {
+          pietyInCents: 0,
+          maintenanceInCents: 0,
+          constructionInCents: 0,
+          missionsInCents: 0,
+          othersInCents: collection.amountInCents,
+        },
+        maintenanceCashInCents: collection.maintenanceCashInCents ?? 0,
+      });
       summary.collections += 1;
     }
   }
@@ -140,7 +153,7 @@ export function mergeDatabases(current: AppDatabase, imported: AppDatabase): { d
     const duplicate = result.expenses.some((item) => item.churchId === churchId && item.competency === expense.competency && item.category === expense.category && item.amountInCents === expense.amountInCents && item.dueDate === expense.dueDate);
     if (duplicate) summary.skipped += 1;
     else {
-      result.expenses.push({ ...expense, id: result.expenses.some((item) => item.id === expense.id) ? newId("expense") : expense.id, churchId });
+      result.expenses.push({ ...expense, id: result.expenses.some((item) => item.id === expense.id) ? newId("expense") : expense.id, churchId, paymentSource: expense.paymentSource ?? "administration_account" });
       summary.expenses += 1;
     }
   }

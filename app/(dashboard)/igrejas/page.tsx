@@ -14,7 +14,7 @@ import { Modal } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useDatabase } from "@/hooks/use-database";
 import type { AppDatabase, Church, ChurchContact } from "@/lib/domain/types";
-import { localDatabase } from "@/lib/storage/local-database";
+import { databaseStore } from "@/lib/storage/database-store";
 
 const newChurchContacts: ChurchContact[] = [
   { id: "new-maintenance", name: "", role: "Responsável caixa de manutenção" },
@@ -161,8 +161,8 @@ function ChurchForm({ database, church, onSaved }: { database: AppDatabase; chur
       window.alert("Já existe uma igreja cadastrada com este código.");
       return;
     }
-    if (church) localDatabase.updateChurch(church.id, input);
-    else localDatabase.createChurch(input);
+    if (church) databaseStore.updateChurch(church.id, input);
+    else databaseStore.createChurch(input);
     onSaved();
   }
 
@@ -201,7 +201,7 @@ function SectorForm({ database, sectorId, name, onSaved }: { database: AppDataba
       window.alert("Já existe um setor cadastrado com este nome.");
       return;
     }
-    localDatabase.saveSector(sectorName, sectorId);
+    databaseStore.saveSector(sectorName, sectorId);
     onSaved();
   }
 

@@ -45,6 +45,7 @@ const utilityExpenses: Expense[] = [
     dueDate,
     paymentDate: dueDate,
     status: "paid",
+    paymentSource: "administration_account",
     paymentMethod: "automatic_debit",
     description: `${category} - referência ${String(month).padStart(2, "0")}/2026`,
     category,

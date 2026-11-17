@@ -33,16 +33,18 @@ Os arquivos `page.tsx` e `layout.tsx` permanecem Server Components por padrão. 
 - `npm run build`: build otimizado de produção
 - `npm run start`: executa o build de produção
 - `npm run lint`: valida a qualidade do código
+- `npm run db:migrate`: aplica as novas migrações PostgreSQL no Supabase
+- `npm run db:status`: verifica estrutura, dados, auditoria e Realtime
 
 ## Temas
 
-A preferência é armazenada no navegador. O modo **Automático** acompanha o sistema operacional em tempo real e a inicialização evita a troca visível de cores durante o carregamento.
+A preferência visual é mantida em cookie. O modo **Automático** acompanha o sistema operacional em tempo real e a inicialização evita a troca visível de cores durante o carregamento.
 
-## Persistência temporária
+## Persistência e segurança
 
-Igrejas, coletas, contagens e depósitos ficam no `localStorage`, sob uma camada isolada em `lib/storage`. Isso permite substituir o armazenamento por uma API ou Firebase sem acoplar as telas à tecnologia escolhida.
+Setores, igrejas, coletas, depósitos, despesas e programações são persistidos no PostgreSQL do Supabase. O navegador mantém somente um cache em memória e recebe atualizações em tempo real; não há persistência financeira local.
 
-Enquanto não houver banco remoto, os dados pertencem somente ao navegador atual e podem ser perdidos se os dados do site forem apagados. Use **Exportar backup** regularmente na tela de coletas.
+O Supabase Auth identifica os usuários e as políticas RLS limitam menus, igrejas e operações de escrita. Alterações operacionais geram eventos de auditoria consultáveis exclusivamente pelo Superadministrador.
 
 ## Fluxo mensal
 
@@ -64,4 +66,4 @@ Na competência mensal, as coletas previstas são calculadas automaticamente a p
 
 As despesas são registradas separadamente por igreja e mês de referência, com vencimento e pagamento independentes, além de categoria, favorecido e documento. Os relatórios consolidam arrecadação, depósitos, despesas, resultado líquido e conciliação sem misturar os conceitos contábeis.
 
-Em **Configurações**, o banco local pode ser exportado ou importado em JSON. A opção de mesclagem normaliza nomes e remapeia relacionamentos para adicionar apenas igrejas e lançamentos ausentes, preservando os cadastros existentes.
+Em **Configurações**, os dados do Supabase podem ser exportados ou importados em JSON pelo Superadministrador. A importação é validada no servidor e enviada diretamente ao banco remoto.

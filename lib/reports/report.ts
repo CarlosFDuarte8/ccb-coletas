@@ -15,6 +15,7 @@ export type ReportMonth = {
   competency: string;
   label: string;
   collectedInCents: number;
+  reservedMaintenanceCashInCents: number;
   depositedInCents: number;
   balanceInCents: number;
   normalInCents: number;
@@ -70,6 +71,7 @@ export type ReportData = {
   expenses: ExpenseReportRow[];
   totals: {
     collectedInCents: number;
+    reservedMaintenanceCashInCents: number;
     depositedInCents: number;
     balanceInCents: number;
     normalInCents: number;
@@ -145,6 +147,7 @@ export function buildReport(database: AppDatabase, filters: ReportFilters): Repo
     const monthCollections = collections.filter((collection) => collection.competency === competency);
     const monthDeposits = deposits.filter((deposit) => deposit.competency === competency);
     const collectedInCents = monthCollections.reduce((sum, item) => sum + item.amountInCents, 0);
+    const reservedMaintenanceCashInCents = monthCollections.reduce((sum, item) => sum + item.maintenanceCashInCents, 0);
     const depositedInCents = monthDeposits.reduce((sum, item) => sum + item.amountInCents, 0);
     const expensesInCents = expenses.filter((expense) => expense.competency === competency).reduce((sum, item) => sum + item.amountInCents, 0);
     const monthExpenses = expenses.filter((expense) => expense.competency === competency);
@@ -152,8 +155,9 @@ export function buildReport(database: AppDatabase, filters: ReportFilters): Repo
       competency,
       label: monthLabel(competency),
       collectedInCents,
+      reservedMaintenanceCashInCents,
       depositedInCents,
-      balanceInCents: collectedInCents - depositedInCents,
+      balanceInCents: (collectedInCents - reservedMaintenanceCashInCents) - depositedInCents,
       normalInCents: monthCollections.filter((item) => item.collectionType === "normal").reduce((sum, item) => sum + item.amountInCents, 0),
       specialInCents: monthCollections.filter((item) => item.collectionType === "especial").reduce((sum, item) => sum + item.amountInCents, 0),
       cultoInCents: monthCollections.filter((item) => item.meetingType === "culto").reduce((sum, item) => sum + item.amountInCents, 0),
@@ -172,6 +176,7 @@ export function buildReport(database: AppDatabase, filters: ReportFilters): Repo
     .filter((church) => selectedIds.has(church.id))
     .map((church): ReportChurch => {
       const collectedInCents = collections.filter((item) => item.churchId === church.id).reduce((sum, item) => sum + item.amountInCents, 0);
+      const reservedMaintenanceCashInCents = collections.filter((item) => item.churchId === church.id).reduce((sum, item) => sum + item.maintenanceCashInCents, 0);
       const depositedInCents = deposits.filter((item) => item.churchId === church.id).reduce((sum, item) => sum + item.amountInCents, 0);
       const expensesInCents = expenses.filter((item) => item.churchId === church.id).reduce((sum, item) => sum + item.amountInCents, 0);
       return {
@@ -181,7 +186,7 @@ export function buildReport(database: AppDatabase, filters: ReportFilters): Repo
         sectorName: churchDetails.get(church.id)?.sectorName ?? "Sem setor",
         collectedInCents,
         depositedInCents,
-        balanceInCents: collectedInCents - depositedInCents,
+        balanceInCents: (collectedInCents - reservedMaintenanceCashInCents) - depositedInCents,
         expensesInCents,
         netResultInCents: collectedInCents - expensesInCents,
       };
@@ -189,6 +194,7 @@ export function buildReport(database: AppDatabase, filters: ReportFilters): Repo
     .sort((a, b) => filters.content === "expenses" ? b.expensesInCents - a.expensesInCents : b.collectedInCents - a.collectedInCents);
 
   const collectedInCents = months.reduce((sum, item) => sum + item.collectedInCents, 0);
+  const reservedMaintenanceCashInCents = months.reduce((sum, item) => sum + item.reservedMaintenanceCashInCents, 0);
   const depositedInCents = months.reduce((sum, item) => sum + item.depositedInCents, 0);
   const expensesInCents = months.reduce((sum, item) => sum + item.expensesInCents, 0);
   const sector = database.sectors.find((item) => item.id === filters.scopeId);
@@ -205,8 +211,9 @@ export function buildReport(database: AppDatabase, filters: ReportFilters): Repo
     expenses,
     totals: {
       collectedInCents,
+      reservedMaintenanceCashInCents,
       depositedInCents,
-      balanceInCents: collectedInCents - depositedInCents,
+      balanceInCents: (collectedInCents - reservedMaintenanceCashInCents) - depositedInCents,
       normalInCents: months.reduce((sum, item) => sum + item.normalInCents, 0),
       specialInCents: months.reduce((sum, item) => sum + item.specialInCents, 0),
       cultoInCents: months.reduce((sum, item) => sum + item.cultoInCents, 0),

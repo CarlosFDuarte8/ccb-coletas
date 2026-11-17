@@ -1,5 +1,5 @@
 import type { ReportData } from "./report";
-import { paymentMethodLabel } from "@/lib/domain/expense";
+import { paymentMethodLabel, paymentSourceLabel } from "@/lib/domain/expense";
 
 function money(valueInCents: number) {
   return valueInCents / 100;
@@ -32,7 +32,7 @@ export function exportReportCsv(report: ReportData) {
     ["Tipo", "Competência", "Data", "Setor", "Igreja", "Código", "Reunião/Categoria", "Comprovante", "Valor"],
     ...report.collections.map((item) => ["Coleta", item.competency, item.date, safeText(item.sectorName), safeText(item.churchName), safeText(item.churchCode), `${item.meetingType === "rjm" ? "RJM" : "Culto"} / ${item.collectionType}`, "", money(item.amountInCents).toFixed(2).replace(".", ",")]),
     ...report.deposits.map((item) => ["Depósito", item.competency, item.date, safeText(item.sectorName), safeText(item.churchName), safeText(item.churchCode), "Confirmado", safeText(item.transactionNumber), money(item.amountInCents).toFixed(2).replace(".", ",")]),
-    ...report.expenses.map((item) => ["Despesa", item.competency, item.dueDate, safeText(item.sectorName), safeText(item.churchName), safeText(item.churchCode), safeText(`${item.status === "paid" ? "Paga" : "Pendente"} / ${paymentMethodLabel(item.paymentMethod)} / ${item.category} / ${item.description} / pagamento: ${item.paymentDate || "-"}`), safeText(item.documentNumber), money(item.amountInCents).toFixed(2).replace(".", ",")]),
+    ...report.expenses.map((item) => ["Despesa", item.competency, item.dueDate, safeText(item.sectorName), safeText(item.churchName), safeText(item.churchCode), safeText(`${item.status === "paid" ? "Paga" : "Pendente"} / ${paymentSourceLabel(item.paymentSource)} / ${paymentMethodLabel(item.paymentMethod)} / ${item.category} / ${item.description} / pagamento: ${item.paymentDate || "-"}`), safeText(item.documentNumber), money(item.amountInCents).toFixed(2).replace(".", ",")]),
   ];
   const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(";")).join("\r\n");
   download(`\uFEFF${csv}`, "text/csv;charset=utf-8", `${fileBase(report)}.csv`);
@@ -85,7 +85,7 @@ export async function exportReportExcel(report: ReportData) {
         name: "Despesas",
         freeze: { rows: 1 },
         cols: "14,14,14,14,20,24,20,18,30,24,18,18",
-        data: [header(["Referência", "Vencimento", "Pagamento", "Status", "Setor", "Igreja", "Forma", "Categoria", "Descrição", "Pago a", "Documento", "Valor"]), ...report.expenses.map((item) => [item.competency, item.dueDate, item.paymentDate, item.status === "paid" ? "Paga" : "Pendente", safeText(item.sectorName), safeText(item.churchName), paymentMethodLabel(item.paymentMethod), safeText(item.category), safeText(item.description), safeText(item.payee), safeText(item.documentNumber), money(item.amountInCents)])],
+        data: [header(["Referência", "Vencimento", "Pagamento", "Status", "Origem", "Setor", "Igreja", "Forma", "Categoria", "Descrição", "Pago a", "Documento", "Valor"]), ...report.expenses.map((item) => [item.competency, item.dueDate, item.paymentDate, item.status === "paid" ? "Paga" : "Pendente", paymentSourceLabel(item.paymentSource), safeText(item.sectorName), safeText(item.churchName), paymentMethodLabel(item.paymentMethod), safeText(item.category), safeText(item.description), safeText(item.payee), safeText(item.documentNumber), money(item.amountInCents)])],
       } : null,
     ],
   });
@@ -149,8 +149,8 @@ export async function exportReportPdf(report: ReportData) {
     doc.text("Detalhamento das despesas", 14, 15);
     autoTable(doc, {
       startY: 20,
-      head: [["Referência", "Vencimento", "Pagamento", "Status", "Igreja", "Forma / categoria", "Descrição", "Valor"]],
-      body: report.expenses.map((item) => [item.competency, item.dueDate, item.paymentDate || "-", item.status === "paid" ? "Paga" : "Pendente", item.churchName, `${paymentMethodLabel(item.paymentMethod)} / ${item.category}`, item.description, brl(item.amountInCents)]),
+      head: [["Referência", "Vencimento", "Pagamento", "Status", "Igreja", "Origem / forma / categoria", "Descrição", "Valor"]],
+      body: report.expenses.map((item) => [item.competency, item.dueDate, item.paymentDate || "-", item.status === "paid" ? "Paga" : "Pendente", item.churchName, `${paymentSourceLabel(item.paymentSource)} / ${paymentMethodLabel(item.paymentMethod)} / ${item.category}`, item.description, brl(item.amountInCents)]),
       styles: { fontSize: 7.5, cellPadding: 2.2 },
       headStyles: { fillColor: [217, 154, 56] },
     });

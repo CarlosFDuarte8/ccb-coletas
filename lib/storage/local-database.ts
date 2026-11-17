@@ -1,21 +1,26 @@
 import type {
   AppDatabase,
   ChurchUpdate,
-  Deposit,
   DepositUpdate,
   NewCollection,
   NewExpense,
   ScheduleExceptionInput,
   ServiceScheduleInput,
 } from "@/lib/domain/types";
-import { seedDatabase } from "./seed";
-import { mergeDatabases, type ImportSummary } from "./database-import";
+import { fetchCloudDatabase, subscribeToCloudChanges, syncCloudChanges } from "@/lib/supabase/cloud-database";
 
-const STORAGE_KEY = "ccb-coletas:database:v1";
-
-function cloneSeed(): AppDatabase {
-  return structuredClone(seedDatabase);
-}
+const emptyDatabase: AppDatabase = {
+  version: 8,
+  appliedSeeds: [],
+  sectors: [],
+  churches: [],
+  collections: [],
+  deposits: [],
+  competencies: [],
+  serviceSchedules: [],
+  scheduleExceptions: [],
+  expenses: [],
+};
 
 function createId(prefix: string) {
   const id = typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -24,111 +29,61 @@ function createId(prefix: string) {
   return `${prefix}-${id}`;
 }
 
-function migrateDatabase(stored: Partial<AppDatabase> & { deposits?: Partial<Deposit>[] }): AppDatabase {
-  const fallback = cloneSeed();
-  const storedChurches = stored.churches ?? fallback.churches;
-  const appliedSeeds = stored.appliedSeeds ?? [];
-  const shouldAddMockData = !appliedSeeds.includes("utility-expenses-2026");
-  const churches = shouldAddMockData
-    ? [...storedChurches, ...fallback.churches.filter((seedChurch) => !storedChurches.some((church) => church.name.toLocaleLowerCase("pt-BR") === seedChurch.name.toLocaleLowerCase("pt-BR")))]
-    : storedChurches;
-  const migratedExpenses = (stored.expenses ?? []).map((expense) => {
-    const legacy = expense as typeof expense & { date?: string; dueDate?: string; paymentDate?: string; status?: "pending" | "paid"; paymentMethod?: typeof expense.paymentMethod };
-    const previousDate = legacy.date ?? "";
-    return {
-      ...expense,
-      dueDate: legacy.dueDate ?? previousDate,
-      paymentDate: legacy.paymentDate ?? previousDate,
-      status: legacy.status ?? "paid",
-      paymentMethod: legacy.paymentMethod ?? "not_informed",
-    };
-  });
-  const mockExpenses = shouldAddMockData ? fallback.expenses.map((expense) => {
-    const seedChurchName = fallback.churches.find((church) => church.id === expense.churchId)?.name;
-    const actualChurch = churches.find((church) => church.name.toLocaleLowerCase("pt-BR") === seedChurchName?.toLocaleLowerCase("pt-BR"));
-    return { ...expense, churchId: actualChurch?.id ?? expense.churchId };
-  }).filter((mock) => !migratedExpenses.some((expense) =>
-    expense.churchId === mock.churchId
-    && expense.competency === mock.competency
-    && expense.category === mock.category
-    && expense.amountInCents === mock.amountInCents,
-  )) : [];
-  return {
-    version: 8,
-    appliedSeeds: shouldAddMockData ? [...appliedSeeds, "utility-expenses-2026"] : appliedSeeds,
-    sectors: stored.sectors ?? fallback.sectors,
-    churches,
-    collections: stored.collections ?? [],
-    deposits: (stored.deposits ?? []).map((deposit) => ({
-      ...deposit,
-      status: deposit.status ?? "confirmed",
-      confirmedAt: deposit.confirmedAt ?? deposit.createdAt ?? null,
-    })) as Deposit[],
-    competencies: stored.competencies ?? [],
-    serviceSchedules: stored.serviceSchedules ?? fallback.serviceSchedules,
-    scheduleExceptions: stored.scheduleExceptions ?? fallback.scheduleExceptions,
-    expenses: [...migratedExpenses, ...mockExpenses],
-  };
-}
-
-class LocalDatabase {
-  private cache: AppDatabase | null = null;
+class DatabaseStore {
+  private cache: AppDatabase = emptyDatabase;
+  private initialized = false;
+  private userId = "";
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private realtimeCleanup: (() => void) | null = null;
   private readonly listeners = new Set<() => void>();
 
-  getServerSnapshot = () => seedDatabase;
-
-  getSnapshot = () => {
-    if (this.cache) return this.cache;
-    if (typeof window === "undefined") return seedDatabase;
-
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      this.cache = stored ? migrateDatabase(JSON.parse(stored)) : cloneSeed();
-    } catch {
-      this.cache = cloneSeed();
-    }
-    return this.cache;
-  };
+  getServerSnapshot = () => emptyDatabase;
+  getSnapshot = () => this.cache;
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   };
 
-  initialize() {
+  async initialize(userId?: string) {
     if (typeof window === "undefined") return;
+    if (userId && userId !== this.userId) {
+      this.userId = userId;
+      this.initialized = false;
+      this.realtimeCleanup?.();
+      this.realtimeCleanup = null;
+      this.persist(emptyDatabase, false);
+    }
+    if (this.initialized) return;
+    this.initialized = true;
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (!stored || JSON.parse(stored).version !== 8) this.persist(this.getSnapshot());
-    } catch {
-      this.persist(this.getSnapshot());
+      await this.refreshFromCloud();
+      this.realtimeCleanup = subscribeToCloudChanges(() => {
+        if (this.refreshTimer) clearTimeout(this.refreshTimer);
+        this.refreshTimer = setTimeout(() => { void this.refreshFromCloud(); }, 150);
+      });
+    } catch (error) {
+      this.initialized = false;
+      throw error;
     }
   }
 
-  importDatabase(input: Partial<AppDatabase>, mode: "merge" | "replace"): ImportSummary {
-    const normalized = migrateDatabase(input);
-    if (mode === "replace") {
-      this.persist(normalized);
-      return {
-        sectors: normalized.sectors.length,
-        churches: normalized.churches.length,
-        collections: normalized.collections.length,
-        deposits: normalized.deposits.length,
-        expenses: normalized.expenses.length,
-        schedules: normalized.serviceSchedules.length,
-        skipped: 0,
-        repaired: 0,
-      };
+  async refreshFromCloud() {
+    if (typeof window === "undefined") return false;
+    const cloud = await fetchCloudDatabase();
+    if (!cloud) {
+      this.persist(emptyDatabase, false);
+      return true;
     }
-    const merged = mergeDatabases(this.getSnapshot(), normalized);
-    this.persist(merged.database);
-    return merged.summary;
+    this.persist(cloud, false);
+    return true;
   }
 
   addCollection(input: NewCollection) {
     const now = new Date().toISOString();
     this.update((database) => {
       this.assertOpen(database, input.churchId, input.competency);
+      this.assertCollectionAllocation(input);
       const duplicate = input.serviceScheduleId && database.collections.some((collection) =>
         collection.churchId === input.churchId
         && collection.competency === input.competency
@@ -148,6 +103,7 @@ class LocalDatabase {
     this.update((database) => {
       const current = database.collections.find((collection) => collection.id === id);
       if (current) this.assertOpen(database, current.churchId, current.competency);
+      this.assertCollectionAllocation(input);
       const associationChanged = !current
         || current.serviceScheduleId !== input.serviceScheduleId
         || current.date !== input.date;
@@ -231,15 +187,27 @@ class LocalDatabase {
 
   addExpense(input: NewExpense) {
     const now = new Date().toISOString();
-    this.update((database) => ({
-      ...database,
-      expenses: [...database.expenses, { ...input, id: createId("expense"), createdAt: now, updatedAt: now }],
-    }));
+    this.update((database) => {
+      if (input.status === "paid" && input.paymentSource === "maintenance_cash") {
+        this.assertMaintenanceCashAvailability(database, input.churchId, input.competency, input.amountInCents);
+      }
+      return {
+        ...database,
+        expenses: [...database.expenses, { ...input, id: createId("expense"), createdAt: now, updatedAt: now }],
+      };
+    });
   }
 
   updateExpense(id: string, input: NewExpense) {
     const now = new Date().toISOString();
     this.update((database) => {
+      const current = database.expenses.find((expense) => expense.id === id);
+      const originalAmount = current?.status === "paid" && current.paymentSource === "maintenance_cash"
+        ? current.amountInCents
+        : 0;
+      if (input.status === "paid" && input.paymentSource === "maintenance_cash") {
+        this.assertMaintenanceCashAvailability(database, input.churchId, input.competency, input.amountInCents - originalAmount);
+      }
       return { ...database, expenses: database.expenses.map((expense) => expense.id === id ? { ...expense, ...input, updatedAt: now } : expense) };
     });
   }
@@ -255,9 +223,16 @@ class LocalDatabase {
     this.update((database) => {
       const deposits = database.deposits.filter((item) => item.churchId === churchId && item.competency === competency);
       if (deposits.some((item) => item.status === "draft")) throw new Error("Existem depósitos em rascunho.");
-      const collected = database.collections.filter((item) => item.churchId === churchId && item.competency === competency).reduce((sum, item) => sum + item.amountInCents, 0);
+      const monthCollections = database.collections.filter((item) => item.churchId === churchId && item.competency === competency);
+      const collected = monthCollections.reduce((sum, item) => sum + item.amountInCents, 0);
+      const reservedMaintenanceCash = monthCollections.reduce((sum, item) => sum + item.maintenanceCashInCents, 0);
+      const spentMaintenanceCash = this.paidMaintenanceCash(database, churchId, competency);
+      if (spentMaintenanceCash > reservedMaintenanceCash) {
+        throw new Error("As despesas pagas pelo caixa de manutenção ultrapassam o valor reservado nas coletas.");
+      }
       const deposited = deposits.reduce((sum, item) => sum + item.amountInCents, 0);
-      if (collected !== deposited) throw new Error("A competência possui saldo pendente.");
+      const expectedDeposit = collected - reservedMaintenanceCash;
+      if (expectedDeposit !== deposited) throw new Error("A competência possui saldo pendente.");
       const ensured = this.ensureCompetency(database, churchId, competency, now);
       return {
         ...ensured,
@@ -386,15 +361,58 @@ class LocalDatabase {
     if (duplicate) throw new Error("Este número de comprovante já foi utilizado em outro depósito.");
   }
 
+  private assertCollectionAllocation(input: NewCollection) {
+    const breakdownTotal = input.breakdown.pietyInCents
+      + input.breakdown.maintenanceInCents
+      + input.breakdown.constructionInCents
+      + input.breakdown.missionsInCents
+      + input.breakdown.othersInCents;
+    if (breakdownTotal !== input.amountInCents) {
+      throw new Error("A soma do rateio da coleta deve ser igual ao valor total.");
+    }
+    if (input.maintenanceCashInCents > input.amountInCents) {
+      throw new Error("O caixa de manutenção não pode ser maior que o valor total da coleta.");
+    }
+    if (input.maintenanceCashInCents > input.breakdown.maintenanceInCents) {
+      throw new Error("O caixa de manutenção deve estar dentro do valor de manutenção.");
+    }
+  }
+
+  private maintenanceCashReserved(database: AppDatabase, churchId: string, competency: string) {
+    return database.collections
+      .filter((item) => item.churchId === churchId && item.competency === competency)
+      .reduce((sum, item) => sum + item.maintenanceCashInCents, 0);
+  }
+
+  private paidMaintenanceCash(database: AppDatabase, churchId: string, competency: string) {
+    return database.expenses
+      .filter((item) => item.churchId === churchId && item.competency === competency && item.status === "paid" && item.paymentSource === "maintenance_cash")
+      .reduce((sum, item) => sum + item.amountInCents, 0);
+  }
+
+  private assertMaintenanceCashAvailability(database: AppDatabase, churchId: string, competency: string, extraAmountInCents: number) {
+    if (extraAmountInCents <= 0) return;
+    const reserved = this.maintenanceCashReserved(database, churchId, competency);
+    const alreadyPaid = this.paidMaintenanceCash(database, churchId, competency);
+    if (alreadyPaid + extraAmountInCents > reserved) {
+      throw new Error("O caixa de manutenção desta competência não possui saldo suficiente para esta despesa.");
+    }
+  }
+
   private update(recipe: (database: AppDatabase) => AppDatabase) {
     this.persist(recipe(this.getSnapshot()));
   }
 
-  private persist(database: AppDatabase) {
+  private persist(database: AppDatabase, sync = true) {
+    const previous = this.cache;
     this.cache = database;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(database));
     this.listeners.forEach((listener) => listener());
+    if (sync) {
+      void syncCloudChanges(previous, database).catch(() => {
+        void this.refreshFromCloud().catch(() => undefined);
+      });
+    }
   }
 }
 
-export const localDatabase = new LocalDatabase();
+export const databaseStore = new DatabaseStore();

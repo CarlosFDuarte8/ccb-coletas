@@ -2,12 +2,22 @@ import Link from "next/link";
 import {
   ArrowUpRightIcon,
   BuildingIcon,
+  ClockIcon,
   DownloadIcon,
   MonitorIcon,
   SettingsIcon,
+  UsersIcon,
 } from "@/components/icons";
+import { requireUser } from "@/lib/auth/current-user";
 
-const settings = [
+const baseSettings = [
+  {
+    title: "Meu perfil",
+    description: "Atualize seu nome e altere sua senha de acesso ao sistema.",
+    href: "/configuracoes/perfil",
+    icon: UsersIcon,
+    status: "Pessoal",
+  },
   {
     title: "Dados e backup",
     description: "Exporte, importe e mescle os dados armazenados neste dispositivo.",
@@ -24,7 +34,12 @@ const settings = [
   },
 ] as const;
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const user = await requireUser();
+  const settings = user.role === "super_admin" ? [...baseSettings,
+    { title: "Usuários e acessos", description: "Cadastre usuários e controle menus, igrejas e permissões de alteração.", href: "/configuracoes/usuarios", icon: UsersIcon, status: "Superadmin" },
+    { title: "Histórico de eventos", description: "Consulte quem cadastrou, alterou ou excluiu informações do sistema.", href: "/configuracoes/historico", icon: ClockIcon, status: "Superadmin" },
+  ] : baseSettings;
   return (
     <div className="page-container">
       <section>

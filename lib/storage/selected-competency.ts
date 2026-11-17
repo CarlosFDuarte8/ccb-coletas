@@ -1,16 +1,10 @@
-const STORAGE_KEY = "ccb-coletas:selected-competency";
-
 class SelectedCompetencyStore {
-  private cached: string | null = null;
+  private cached = "";
   private readonly listeners = new Set<() => void>();
 
   getServerSnapshot = () => "";
 
-  getSnapshot = () => {
-    if (this.cached !== null) return this.cached;
-    this.cached = window.localStorage.getItem(STORAGE_KEY) ?? "";
-    return this.cached;
-  };
+  getSnapshot = () => this.cached;
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -19,7 +13,6 @@ class SelectedCompetencyStore {
 
   set(competency: string) {
     this.cached = competency;
-    window.localStorage.setItem(STORAGE_KEY, competency);
     this.listeners.forEach((listener) => listener());
   }
 }
