@@ -1,5 +1,6 @@
 import type { AppDatabase } from "@/lib/domain/types";
 import { createClient } from "./client";
+import { readAllPages } from "./pagination";
 
 type Row = Record<string, unknown>;
 
@@ -30,20 +31,11 @@ function normalizeBreakdown(value: unknown, amountInCents: number): AppDatabase[
 
 export async function fetchCloudDatabase(): Promise<AppDatabase | null> {
   const supabase = createClient();
-  const results = await Promise.all([
-    supabase.from("sectors").select("*"),
-    supabase.from("churches").select("*"),
-    supabase.from("collections").select("*"),
-    supabase.from("deposits").select("*"),
-    supabase.from("monthly_competencies").select("*"),
-    supabase.from("service_schedules").select("*"),
-    supabase.from("schedule_exceptions").select("*"),
-    supabase.from("expenses").select("*"),
-  ]);
-  const error = results.find((result) => result.error)?.error;
-  if (error) throw error;
-
-  const [sectors, churches, collections, deposits, competencies, schedules, exceptions, expenses] = results.map((result) => (result.data ?? []) as Row[]);
+  const tables = ["sectors", "churches", "collections", "deposits", "monthly_competencies", "service_schedules", "schedule_exceptions", "expenses"];
+  const [sectors, churches, collections, deposits, competencies, schedules, exceptions, expenses] = await Promise.all(tables.map((table) => readAllPages<Row & { id: unknown }>((after) => {
+    const query = supabase.from(table).select("*").order("id").limit(500);
+    return after ? query.gt("id", after) : query;
+  })));
   if (sectors.length === 0 && churches.length === 0) return null;
 
   return {
@@ -73,12 +65,13 @@ export async function fetchCloudDatabase(): Promise<AppDatabase | null> {
       id: text(row.id), churchId: text(row.church_id), competency: text(row.competency), date: text(row.date),
       transactionNumber: text(row.transaction_number), amountInCents: cents(row.amount_in_cents),
       denominationCounts: (row.denomination_counts ?? {}) as Record<string, number>, notes: text(row.notes),
-      status: row.status as "draft" | "confirmed", confirmedAt: text(row.confirmed_at) || null,
+      status: row.status as "draft" | "confirmed" | "reversed", confirmedAt: text(row.confirmed_at) || null,
+      reversedAt: text(row.reversed_at) || null, reversalReason: text(row.reversal_reason),
       createdAt: timestamp(row.created_at), updatedAt: timestamp(row.updated_at),
     })),
     competencies: competencies.map((row) => ({
       id: text(row.id), churchId: text(row.church_id), competency: text(row.competency), status: row.status as "open" | "closed",
-      closedAt: text(row.closed_at) || null, createdAt: timestamp(row.created_at), updatedAt: timestamp(row.updated_at),
+      closedAt: text(row.closed_at) || null, reopenReason: text(row.reopen_reason), createdAt: timestamp(row.created_at), updatedAt: timestamp(row.updated_at),
     })),
     serviceSchedules: schedules.map((row) => ({
       id: text(row.id), churchId: text(row.church_id), weekday: Number(row.weekday), time: shortTime(row.time),
@@ -104,35 +97,42 @@ function rowsByTable(database: AppDatabase): Record<string, Record<string, unkno
     churches: database.churches.map((item) => ({ id: item.id, sector_id: item.sectorId, name: item.name, code: item.code, address: item.address, latitude: item.latitude, longitude: item.longitude, contacts: item.contacts, active: item.active, created_at: item.createdAt, updated_at: item.updatedAt })),
     service_schedules: database.serviceSchedules.map((item) => ({ id: item.id, church_id: item.churchId, weekday: item.weekday, time: item.time, meeting_type: item.meetingType, title: item.title, active: item.active, created_at: item.createdAt, updated_at: item.updatedAt })),
     schedule_exceptions: database.scheduleExceptions.map((item) => ({ id: item.id, church_id: item.churchId, date: item.date, description: item.description, overrides: item.overrides, created_at: item.createdAt, updated_at: item.updatedAt })),
-    monthly_competencies: database.competencies.map((item) => ({ id: item.id, church_id: item.churchId, competency: item.competency, status: item.status, closed_at: item.closedAt, created_at: item.createdAt, updated_at: item.updatedAt })),
+    monthly_competencies: database.competencies.map((item) => ({ id: item.id, church_id: item.churchId, competency: item.competency, status: item.status, closed_at: item.closedAt, reopen_reason: item.reopenReason ?? "", created_at: item.createdAt, updated_at: item.updatedAt })),
     collections: database.collections.map((item) => ({ id: item.id, church_id: item.churchId, competency: item.competency, date: item.date, meeting_type: item.meetingType, collection_type: item.collectionType, amount_in_cents: item.amountInCents, notes: item.notes, service_schedule_id: item.serviceScheduleId ?? null, service_time: item.serviceTime ?? null, breakdown: { piety_in_cents: item.breakdown.pietyInCents, maintenance_in_cents: item.breakdown.maintenanceInCents, construction_in_cents: item.breakdown.constructionInCents, missions_in_cents: item.breakdown.missionsInCents, others_in_cents: item.breakdown.othersInCents }, maintenance_cash_in_cents: item.maintenanceCashInCents, created_at: item.createdAt, updated_at: item.updatedAt })),
-    deposits: database.deposits.map((item) => ({ id: item.id, church_id: item.churchId, competency: item.competency, date: item.date, transaction_number: item.transactionNumber, amount_in_cents: item.amountInCents, denomination_counts: item.denominationCounts, notes: item.notes, status: item.status, confirmed_at: item.confirmedAt, created_at: item.createdAt, updated_at: item.updatedAt })),
+    deposits: database.deposits.map((item) => ({ id: item.id, church_id: item.churchId, competency: item.competency, date: item.date || null, transaction_number: item.transactionNumber, amount_in_cents: item.amountInCents, denomination_counts: item.denominationCounts, notes: item.notes, status: item.status, confirmed_at: item.confirmedAt, reversed_at: item.reversedAt ?? null, reversal_reason: item.reversalReason ?? "", created_at: item.createdAt, updated_at: item.updatedAt })),
     expenses: database.expenses.map((item) => ({ id: item.id, church_id: item.churchId, competency: item.competency, due_date: item.dueDate || null, payment_date: item.paymentDate || null, status: item.status, payment_source: item.paymentSource, payment_method: item.paymentMethod, description: item.description, category: item.category, amount_in_cents: item.amountInCents, payee: item.payee, document_number: item.documentNumber, notes: item.notes, created_at: item.createdAt, updated_at: item.updatedAt })),
   };
 }
 
-export async function syncCloudChanges(previous: AppDatabase, current: AppDatabase) {
+export async function syncCloudChanges(previous: AppDatabase, current: AppDatabase, operationId?: string) {
   const supabase = createClient();
   const before = rowsByTable(previous);
   const after = rowsByTable(current);
   const tableOrder = ["sectors", "churches", "service_schedules", "schedule_exceptions", "monthly_competencies", "collections", "deposits", "expenses"];
+  const changes: Array<{ table: string; action: string; row: Record<string, unknown>; expected_updated_at: unknown }> = [];
 
   for (const table of tableOrder) {
     const previousById = new Map(before[table].map((row) => [String(row.id), JSON.stringify(row)]));
     const changed = after[table].filter((row) => previousById.get(String(row.id)) !== JSON.stringify(row));
     if (changed.length === 0) continue;
-    const { error } = await supabase.from(table).upsert(changed, { onConflict: "id" });
-    if (error) throw error;
+    const previousRows = new Map(before[table].map((row) => [String(row.id), row]));
+    changes.push(...changed.map((row) => ({ table, action: "upsert", row, expected_updated_at: previousRows.get(String(row.id))?.updated_at ?? null })));
   }
 
   for (const table of [...tableOrder].reverse()) {
     const currentIds = new Set(after[table].map((row) => String(row.id)));
     const removedIds = before[table].map((row) => String(row.id)).filter((id) => !currentIds.has(id));
     if (removedIds.length === 0) continue;
-    const { error } = await supabase.from(table).delete().in("id", removedIds);
-    if (error) throw error;
+    const previousRows = new Map(before[table].map((row) => [String(row.id), row]));
+    changes.push(...removedIds.map((id) => ({ table, action: "delete", row: { id }, expected_updated_at: previousRows.get(id)?.updated_at ?? null })));
   }
+  if (changes.length === 0) return [];
+  const { data, error } = await supabase.rpc("apply_database_changes", { changes, operation_id: operationId ?? null });
+  if (error) throw error;
+  return (data ?? []) as CloudWriteReceipt[];
 }
+
+export type CloudWriteReceipt = { table: string; id: string; created_at: string; updated_at: string };
 
 export function subscribeToCloudChanges(onChange: () => void) {
   const supabase = createClient();

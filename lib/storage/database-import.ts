@@ -14,12 +14,43 @@ export type ImportSummary = {
 export function isDatabaseFile(value: unknown): value is Partial<AppDatabase> {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
-  return Array.isArray(candidate.sectors)
-    && Array.isArray(candidate.churches)
-    && Array.isArray(candidate.collections)
-    && Array.isArray(candidate.deposits)
-    && Array.isArray(candidate.expenses);
+  const fields: Record<string, string[]> = {
+    sectors: ["id", "name"], churches: ["id", "sectorId", "name", "code"],
+    collections: ["id", "churchId", "competency", "date"], deposits: ["id", "churchId", "competency"],
+    expenses: ["id", "churchId", "competency", "description", "category"],
+    competencies: ["id", "churchId", "competency"], serviceSchedules: ["id", "churchId", "time", "title"],
+    scheduleExceptions: ["id", "churchId", "date"],
+  };
+  const required = ["sectors", "churches", "collections", "deposits", "expenses"];
+  for (const [key, strings] of Object.entries(fields)) {
+    const rows = candidate[key];
+    if (rows === undefined && !required.includes(key)) continue;
+    if (!Array.isArray(rows)) return false;
+    const ids = new Set<string>();
+    for (const entry of rows) {
+      if (!entry || typeof entry !== "object") return false;
+      const row = entry as Record<string, unknown>;
+      if (strings.some((name) => typeof row[name] !== "string" || !(row[name] as string).trim())) return false;
+      if (ids.has(row.id as string)) return false;
+      ids.add(row.id as string);
+      if ("competency" in row && (typeof row.competency !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(row.competency))) return false;
+      if (["collections", "deposits", "expenses"].includes(key) && !validCents(row.amountInCents)) return false;
+      if (key === "collections") {
+        if (row.maintenanceCashInCents !== undefined && !validCents(row.maintenanceCashInCents)) return false;
+        if (row.breakdown !== undefined) {
+          if (!row.breakdown || typeof row.breakdown !== "object") return false;
+          const breakdown = row.breakdown as Record<string, unknown>;
+          const parts = ["pietyInCents", "maintenanceInCents", "constructionInCents", "missionsInCents", "othersInCents"].map((name) => breakdown[name]);
+          if (!parts.every(validCents) || (parts as number[]).reduce((sum, item) => sum + item, 0) !== row.amountInCents) return false;
+          if (Number(row.maintenanceCashInCents ?? 0) > Number(breakdown.maintenanceInCents)) return false;
+        } else if (Number(row.maintenanceCashInCents ?? 0) > 0) return false;
+      }
+    }
+  }
+  return true;
 }
+
+function validCents(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0; }
 
 function normalize(value: string) {
   return value

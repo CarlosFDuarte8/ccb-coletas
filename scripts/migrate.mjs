@@ -1,34 +1,37 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import postgres from "postgres";
+import { createDatabaseConnection, describeDatabaseError } from "./lib/database.mjs";
 
-const connectionString = process.env.POSTGRES_URL_NON_POOLING ?? process.env.POSTGRES_URL;
-if (!connectionString) throw new Error("POSTGRES_URL_NON_POOLING ou POSTGRES_URL não configurada.");
-
-const sql = postgres(connectionString, { max: 1, prepare: false });
+let sql;
 const migrationsDirectory = path.join(process.cwd(), "supabase", "migrations");
 
 try {
-  await sql.unsafe(`
+  sql = createDatabaseConnection();
+  await sql.begin(async (transaction) => {
+    await transaction`select pg_advisory_xact_lock(hashtext('ccb-coletas:migrations'))`;
+    await transaction.unsafe(`
     create table if not exists public.app_migrations (
       name text primary key,
       applied_at timestamptz not null default now()
     )
-  `);
+    `);
+  });
   const files = (await readdir(migrationsDirectory)).filter((file) => file.endsWith(".sql")).sort();
   for (const file of files) {
-    const [existing] = await sql`select name from public.app_migrations where name = ${file}`;
-    if (existing) {
-      console.log(`já aplicada: ${file}`);
-      continue;
-    }
     const source = await readFile(path.join(migrationsDirectory, file), "utf8");
-    await sql.begin(async (transaction) => {
+    const applied = await sql.begin(async (transaction) => {
+      await transaction`select pg_advisory_xact_lock(hashtext('ccb-coletas:migrations'))`;
+      const [existing] = await transaction`select name from public.app_migrations where name = ${file}`;
+      if (existing) return false;
       await transaction.unsafe(source);
       await transaction`insert into public.app_migrations (name) values (${file})`;
+      return true;
     });
-    console.log(`aplicada: ${file}`);
+    console.log(`${applied ? "aplicada" : "já aplicada"}: ${file}`);
   }
+} catch (error) {
+  console.error(describeDatabaseError(error));
+  process.exitCode = 1;
 } finally {
-  await sql.end();
+  await sql?.end({ timeout: 2 });
 }

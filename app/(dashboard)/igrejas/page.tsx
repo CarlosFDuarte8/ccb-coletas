@@ -12,6 +12,7 @@ import {
 import { ScheduleSettings } from "@/components/churches/schedule-settings";
 import { Modal } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { useMutation } from "@/hooks/use-mutation";
 import { useDatabase } from "@/hooks/use-database";
 import type { AppDatabase, Church, ChurchContact } from "@/lib/domain/types";
 import { databaseStore } from "@/lib/storage/database-store";
@@ -138,6 +139,7 @@ export default function ChurchesPage() {
 }
 
 function ChurchForm({ database, church, onSaved }: { database: AppDatabase; church?: Church; onSaved: () => void }) {
+  const { run, pending, error } = useMutation();
   const contacts = church?.contacts ?? newChurchContacts;
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -161,13 +163,17 @@ function ChurchForm({ database, church, onSaved }: { database: AppDatabase; chur
       window.alert("Já existe uma igreja cadastrada com este código.");
       return;
     }
-    if (church) databaseStore.updateChurch(church.id, input);
-    else databaseStore.createChurch(input);
-    onSaved();
+    void run(async () => {
+      if (church) await databaseStore.updateChurch(church.id, input);
+      else await databaseStore.createChurch(input);
+      onSaved();
+    });
   }
 
   return (
     <form onSubmit={handleSubmit}>
+      <fieldset className="contents" disabled={pending}>
+      {error && <p className="p-3 text-sm text-red-600" role="alert">{error}</p>}
       <div className="grid gap-6 p-4 sm:p-5 xl:grid-cols-2">
         <fieldset>
           <legend className="mb-4 text-sm font-semibold text-foreground">Identificação</legend>
@@ -186,12 +192,14 @@ function ChurchForm({ database, church, onSaved }: { database: AppDatabase; chur
           <div className="space-y-3">{contacts.map((contact) => <label className="field-label" key={contact.id}>{contact.role}<input className="form-control" defaultValue={contact.name} name={`contact-${contact.id}`} /></label>)}</div>
         </fieldset>
       </div>
-      <div className="flex justify-end border-t border-border bg-surface-subtle p-4 sm:px-5"><button className="button-primary" type="submit">{church ? "Salvar alterações" : "Cadastrar igreja"}</button></div>
+      <div className="flex justify-end border-t border-border bg-surface-subtle p-4 sm:px-5"><button className="button-primary" disabled={pending} type="submit">{church ? "Salvar alterações" : "Cadastrar igreja"}</button></div>
+      </fieldset>
     </form>
   );
 }
 
 function SectorForm({ database, sectorId, name, onSaved }: { database: AppDatabase; sectorId?: string; name?: string; onSaved: () => void }) {
+  const { run, pending, error } = useMutation();
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -201,15 +209,17 @@ function SectorForm({ database, sectorId, name, onSaved }: { database: AppDataba
       window.alert("Já existe um setor cadastrado com este nome.");
       return;
     }
-    databaseStore.saveSector(sectorName, sectorId);
-    onSaved();
+    void run(async () => { await databaseStore.saveSector(sectorName, sectorId); onSaved(); });
   }
 
   return (
     <form className="p-4 sm:p-5" onSubmit={submit}>
+      <fieldset className="contents" disabled={pending}>
+      {error && <p className="p-3 text-sm text-red-600" role="alert">{error}</p>}
       <label className="field-label">Nome do setor<input autoFocus className="form-control" defaultValue={name} name="name" placeholder="Ex.: Brazlândia" required /></label>
       <p className="mt-3 text-xs leading-5 text-muted">Depois de salvo, o setor aparecerá imediatamente no seletor pesquisável do cadastro de igrejas.</p>
-      <div className="mt-5 flex justify-end"><button className="button-primary" type="submit">{sectorId ? "Salvar alterações" : "Cadastrar setor"}</button></div>
+      <div className="mt-5 flex justify-end"><button className="button-primary" disabled={pending} type="submit">{sectorId ? "Salvar alterações" : "Cadastrar setor"}</button></div>
+      </fieldset>
     </form>
   );
 }

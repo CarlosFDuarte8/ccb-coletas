@@ -3,6 +3,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { ArrowUpRightIcon, CalendarIcon, ClockIcon, PlusIcon, TrashIcon } from "@/components/icons";
 import { Modal } from "@/components/ui/modal";
+import { useMutation } from "@/hooks/use-mutation";
 import { useDatabase } from "@/hooks/use-database";
 import type { ScheduleException, ScheduleOverride, ServiceSchedule } from "@/lib/domain/types";
 import { databaseStore } from "@/lib/storage/database-store";
@@ -89,10 +90,11 @@ export function ScheduleSettings({ churchId }: { churchId: string }) {
 }
 
 function ScheduleForm({ churchId, schedule, onClose }: { churchId: string; schedule?: ServiceSchedule; onClose: () => void }) {
+  const { run, pending, error } = useMutation();
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    databaseStore.saveServiceSchedule({
+    void run(async () => { await databaseStore.saveServiceSchedule({
       churchId,
       weekday: Number(form.get("weekday")),
       time: String(form.get("time")),
@@ -100,11 +102,13 @@ function ScheduleForm({ churchId, schedule, onClose }: { churchId: string; sched
       title: String(form.get("title")).trim(),
       active: true,
     }, schedule?.id);
-    onClose();
+    onClose(); });
   }
 
   return (
     <form className="p-4 sm:p-5" onSubmit={submit}>
+      <fieldset className="contents" disabled={pending}>
+      {error && <p className="p-3 text-sm text-red-600" role="alert">{error}</p>}
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="field-label">Dia da semana<select className="form-control" defaultValue={schedule?.weekday ?? 0} name="weekday">{weekdays.map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label>
         <label className="field-label">Horário<input className="form-control" defaultValue={schedule?.time ?? "19:00"} name="time" required type="time" /></label>
@@ -112,9 +116,10 @@ function ScheduleForm({ churchId, schedule, onClose }: { churchId: string; sched
         <label className="field-label">Nome<input className="form-control" defaultValue={schedule?.title ?? "Culto oficial"} name="title" required /></label>
       </div>
       <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-        {schedule ? <button className="button-ghost text-red-600" onClick={() => { if (window.confirm("Excluir este horário recorrente?")) { databaseStore.removeServiceSchedule(schedule.id); onClose(); } }} type="button"><TrashIcon className="size-4" /> Excluir</button> : <span />}
-        <button className="button-primary" type="submit">Salvar horário</button>
+        {schedule ? <button className="button-ghost text-red-600" onClick={() => { if (window.confirm("Excluir este horário recorrente?")) { void run(async () => { await databaseStore.removeServiceSchedule(schedule.id); onClose(); }); } }} type="button"><TrashIcon className="size-4" /> Excluir</button> : <span />}
+        <button className="button-primary" disabled={pending} type="submit">Salvar horário</button>
       </div>
+      </fieldset>
     </form>
   );
 }
@@ -122,6 +127,7 @@ function ScheduleForm({ churchId, schedule, onClose }: { churchId: string; sched
 type OverrideDraft = { status: "normal" | "cancelled" | "changed"; title: string; time: string };
 
 function ExceptionForm({ churchId, schedules, exception, onClose }: { churchId: string; schedules: ServiceSchedule[]; exception?: ScheduleException; onClose: () => void }) {
+  const { run, pending, error } = useMutation();
   const [date, setDate] = useState(exception?.date ?? "");
   const [overrides, setOverrides] = useState<Record<string, OverrideDraft>>(() => Object.fromEntries(
     (exception?.overrides ?? []).map((item) => [item.scheduleId, { status: item.status, title: item.title ?? "", time: item.time ?? "" }]),
@@ -148,12 +154,13 @@ function ExceptionForm({ churchId, schedules, exception, onClose }: { churchId: 
       window.alert("Marque ao menos um culto como cancelado ou alterado.");
       return;
     }
-    databaseStore.saveScheduleException({ churchId, date, description: String(form.get("description")).trim(), overrides: normalized }, exception?.id);
-    onClose();
+    void run(async () => { await databaseStore.saveScheduleException({ churchId, date, description: String(form.get("description")).trim(), overrides: normalized }, exception?.id); onClose(); });
   }
 
   return (
     <form onSubmit={submit}>
+      <fieldset className="contents" disabled={pending}>
+      {error && <p className="p-3 text-sm text-red-600" role="alert">{error}</p>}
       <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5">
         <label className="field-label">Data específica<input className="form-control" onChange={(event) => setDate(event.target.value)} required type="date" value={date} /></label>
         <label className="field-label">Motivo ou título<input className="form-control" defaultValue={exception?.description ?? ""} name="description" placeholder="Ex.: Santa Ceia" required /></label>
@@ -178,9 +185,10 @@ function ExceptionForm({ churchId, schedules, exception, onClose }: { churchId: 
         </div>
       </div>
       <div className="flex flex-col-reverse gap-2 p-4 sm:flex-row sm:justify-between sm:p-5">
-        {exception ? <button className="button-ghost text-red-600" onClick={() => { if (window.confirm("Excluir esta exceção?")) { databaseStore.removeScheduleException(exception.id); onClose(); } }} type="button"><TrashIcon className="size-4" /> Excluir exceção</button> : <span />}
-        <button className="button-primary" type="submit">Salvar exceção</button>
+        {exception ? <button className="button-ghost text-red-600" onClick={() => { if (window.confirm("Excluir esta exceção?")) { void run(async () => { await databaseStore.removeScheduleException(exception.id); onClose(); }); } }} type="button"><TrashIcon className="size-4" /> Excluir exceção</button> : <span />}
+        <button className="button-primary" disabled={pending} type="submit">Salvar exceção</button>
       </div>
+      </fieldset>
     </form>
   );
 }

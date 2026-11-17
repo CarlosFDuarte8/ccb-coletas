@@ -6,6 +6,7 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import type { Expense } from "@/lib/domain/types";
 import { paymentMethods, paymentSources } from "@/lib/domain/expense";
 import { databaseStore } from "@/lib/storage/database-store";
+import { useMutation } from "@/hooks/use-mutation";
 
 const suggestedCategories = ["Água", "Energia elétrica", "Manutenção", "Materiais", "Limpeza", "Serviços", "Impostos e taxas", "Outros"];
 
@@ -17,6 +18,7 @@ type ExpenseFormProps = {
 };
 
 export function ExpenseForm({ churchId, competency, expense, onSuccess }: ExpenseFormProps) {
+  const { run, pending, error: saveError } = useMutation();
   const [referenceCompetency, setReferenceCompetency] = useState(expense?.competency ?? competency);
   const [dueDate, setDueDate] = useState(expense?.dueDate ?? "");
   const [paymentDate, setPaymentDate] = useState(expense?.paymentDate ?? "");
@@ -51,17 +53,16 @@ export function ExpenseForm({ churchId, competency, expense, onSuccess }: Expens
       documentNumber: documentNumber.trim(),
       notes: notes.trim(),
     };
-    try {
-      if (expense) databaseStore.updateExpense(expense.id, input);
-      else databaseStore.addExpense(input);
+    void run(async () => {
+      if (expense) await databaseStore.updateExpense(expense.id, input);
+      else await databaseStore.addExpense(input);
       onSuccess();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Não foi possível salvar a despesa.");
-    }
+    });
   }
 
   return (
     <form className="p-4 sm:p-5" onSubmit={submit}>
+      <fieldset className="contents" disabled={pending}>
       <div className="mb-4 rounded-xl border border-border bg-surface-subtle p-3 text-xs leading-5 text-muted">
         A referência define em qual mês a despesa aparece nos relatórios. Vencimento e pagamento podem ocorrer em meses diferentes.
       </div>
@@ -79,8 +80,9 @@ export function ExpenseForm({ churchId, competency, expense, onSuccess }: Expens
         <label className="field-label">Observação <span className="font-normal text-muted">(opcional)</span><input className="form-control" onChange={(event) => setNotes(event.target.value)} placeholder="Informação adicional" value={notes} /></label>
       </div>
       {paymentMethod === "automatic_debit" && <p className="mt-3 rounded-lg border border-brand/20 bg-brand-soft px-3 py-2 text-xs leading-5 text-muted">Débito automático não exige comprovante. Informe a data do pagamento quando o débito aparecer na conta.</p>}
-      {error && <p className="mt-3 text-xs font-medium text-red-600 dark:text-red-400">{error}</p>}
-      <div className="mt-5 flex justify-end"><button className="button-primary" type="submit"><ReceiptIcon className="size-4" /> {expense ? "Salvar alterações" : "Registrar despesa"}</button></div>
+      {(error || saveError) && <p className="mt-3 text-xs font-medium text-red-600 dark:text-red-400" role="alert">{error || saveError}</p>}
+      <div className="mt-5 flex justify-end"><button className="button-primary" disabled={pending} type="submit"><ReceiptIcon className="size-4" /> {expense ? "Salvar alterações" : "Registrar despesa"}</button></div>
+      </fieldset>
     </form>
   );
 }

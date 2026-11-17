@@ -6,6 +6,7 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import type { Deposit } from "@/lib/domain/types";
 import { BRL_DENOMINATIONS_IN_CENTS, denominationLabel, formatCurrency } from "@/lib/domain/money";
 import { databaseStore } from "@/lib/storage/database-store";
+import { useMutation } from "@/hooks/use-mutation";
 
 type DepositFormProps = {
   churchId: string;
@@ -15,7 +16,8 @@ type DepositFormProps = {
 };
 
 export function DepositForm({ churchId, competency, deposit, onSuccess }: DepositFormProps) {
-  const readOnly = deposit?.status === "confirmed";
+  const { run, pending, error: saveError } = useMutation();
+  const readOnly = Boolean(deposit && deposit.status !== "draft");
   const depositHasCounts = Object.values(deposit?.denominationCounts ?? {}).some((quantity) => quantity > 0);
   const [mode, setMode] = useState<"count" | "manual">(deposit && !depositHasCounts ? "manual" : "count");
   const [date, setDate] = useState(deposit?.date ?? "");
@@ -52,21 +54,20 @@ export function DepositForm({ churchId, competency, deposit, onSuccess }: Deposi
       setError("Informe a data bancária para confirmar o depósito.");
       return;
     }
-    try {
+    void run(async () => {
       if (deposit) {
-        if (shouldConfirm) databaseStore.confirmDeposit(deposit.id, values());
-        else databaseStore.updateDeposit(deposit.id, values());
+        if (shouldConfirm) await databaseStore.confirmDeposit(deposit.id, values());
+        else await databaseStore.updateDeposit(deposit.id, values());
       } else {
-        databaseStore.createDeposit(churchId, competency, values(), shouldConfirm);
+        await databaseStore.createDeposit(churchId, competency, values(), shouldConfirm);
       }
       onSuccess();
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Não foi possível salvar o depósito.");
-    }
+    });
   }
 
   return (
     <form onSubmit={saveDeposit}>
+      <fieldset className="contents" disabled={pending}>
       <div className="border-b border-border p-4 sm:p-5">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">Forma de lançamento</p>
         <div className="grid grid-cols-2 rounded-xl bg-surface-subtle p-1">
@@ -114,11 +115,12 @@ export function DepositForm({ churchId, competency, deposit, onSuccess }: Deposi
         <p className="mt-3 rounded-lg border border-border bg-surface-subtle px-3 py-2 text-xs leading-5 text-muted">
           Este depósito continuará na competência <strong className="text-foreground">{competency.split("-").reverse().join("/")}</strong>, mesmo que a data bancária seja posterior.
         </p>
-        {error && <p className="mt-3 text-xs font-medium text-red-600 dark:text-red-400">{error}</p>}
+        {(error || saveError) && <p className="mt-3 text-xs font-medium text-red-600 dark:text-red-400" role="alert">{error || saveError}</p>}
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          {deposit?.status !== "confirmed" && <button className={transactionNumber.trim() ? "button-primary" : "button-secondary"} type="submit">{transactionNumber.trim() ? <CheckCircleIcon className="size-4" /> : <BanknoteIcon className="size-4" />} {transactionNumber.trim() ? "Salvar e confirmar" : "Salvar rascunho"}</button>}
+          {!readOnly && <button className={transactionNumber.trim() ? "button-primary" : "button-secondary"} disabled={pending} type="submit">{transactionNumber.trim() ? <CheckCircleIcon className="size-4" /> : <BanknoteIcon className="size-4" />} {transactionNumber.trim() ? "Salvar e confirmar" : "Salvar rascunho"}</button>}
         </div>
       </div>
+      </fieldset>
     </form>
   );
 }

@@ -20,7 +20,7 @@ const baseSettings = [
   },
   {
     title: "Dados e backup",
-    description: "Exporte, importe e mescle os dados armazenados neste dispositivo.",
+    description: "Exporte e restaure os dados operacionais armazenados no Supabase.",
     href: "/configuracoes/dados",
     icon: DownloadIcon,
     status: "Disponível",
@@ -49,7 +49,7 @@ export default async function SettingsPage() {
       </section>
 
       <section>
-        <div className="mb-3"><h2 className="text-sm font-semibold text-foreground">Sistema</h2><p className="mt-1 text-xs text-muted">Dados locais e funcionamento da aplicação</p></div>
+        <div className="mb-3"><h2 className="text-sm font-semibold text-foreground">Sistema</h2><p className="mt-1 text-xs text-muted">Dados do Supabase e funcionamento da aplicação</p></div>
         <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
           {settings.map((item) => {
             const Icon = item.icon;

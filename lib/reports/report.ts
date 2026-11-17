@@ -1,7 +1,10 @@
 import type { AppDatabase, Collection, Deposit, Expense } from "@/lib/domain/types";
+import { maintenanceStatement } from "@/lib/domain/maintenance-account";
 
 export type ReportScope = "general" | "sector" | "church";
 export type ReportContent = "complete" | "collections" | "expenses";
+export type ReportBasis = "competency" | "cash";
+export function reportBasisLabel(basis?: ReportBasis) { return basis === "cash" ? "Caixa: datas de recebimento, depósito e pagamento" : "Competência: mês de referência"; }
 
 export type ReportFilters = {
   scope: ReportScope;
@@ -9,6 +12,7 @@ export type ReportFilters = {
   from: string;
   to: string;
   content: ReportContent;
+  basis?: ReportBasis;
 };
 
 export type ReportMonth = {
@@ -29,6 +33,10 @@ export type ReportMonth = {
   paidExpensesInCents: number;
   pendingExpensesInCents: number;
   expensesCount: number;
+  maintenanceOpeningInCents: number;
+  maintenanceIncomingInCents: number;
+  maintenanceSpentInCents: number;
+  maintenanceBalanceInCents: number;
 };
 
 export type ReportChurch = {
@@ -87,6 +95,10 @@ export type ReportData = {
     pendingExpensesInCents: number;
     paidExpensesCount: number;
     pendingExpensesCount: number;
+    maintenanceOpeningInCents: number;
+    maintenanceIncomingInCents: number;
+    maintenanceSpentInCents: number;
+    maintenanceBalanceInCents: number;
   };
 };
 
@@ -113,6 +125,9 @@ function monthLabel(competency: string) {
 }
 
 export function buildReport(database: AppDatabase, filters: ReportFilters): ReportData {
+  const isCash = filters.basis === "cash";
+  const expenseMonth = (expense: Expense) => isCash ? expense.paymentDate.slice(0, 7) : expense.competency;
+  const depositMonth = (deposit: Deposit) => isCash ? deposit.date.slice(0, 7) : deposit.competency;
   const includeCollections = filters.content !== "expenses";
   const includeExpenses = filters.content !== "collections";
   const selectedChurchIds = database.churches
@@ -135,29 +150,36 @@ export function buildReport(database: AppDatabase, filters: ReportFilters): Repo
     .map((collection) => ({ ...collection, ...churchDetails.get(collection.churchId)! }))
     .sort((a, b) => a.date.localeCompare(b.date));
   const deposits = database.deposits
-    .filter((deposit) => includeCollections && deposit.status === "confirmed" && selectedIds.has(deposit.churchId) && competencySet.has(deposit.competency))
+    .filter((deposit) => includeCollections && deposit.status === "confirmed" && selectedIds.has(deposit.churchId) && competencySet.has(depositMonth(deposit)))
     .map((deposit) => ({ ...deposit, ...churchDetails.get(deposit.churchId)! }))
     .sort((a, b) => a.date.localeCompare(b.date));
   const expenses = database.expenses
-    .filter((expense) => includeExpenses && selectedIds.has(expense.churchId) && competencySet.has(expense.competency))
+    .filter((expense) => includeExpenses && (!isCash || expense.status === "paid") && selectedIds.has(expense.churchId) && competencySet.has(expenseMonth(expense)))
     .map((expense) => ({ ...expense, ...churchDetails.get(expense.churchId)! }))
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
   const months = competencies.map((competency): ReportMonth => {
     const monthCollections = collections.filter((collection) => collection.competency === competency);
-    const monthDeposits = deposits.filter((deposit) => deposit.competency === competency);
+    const monthDeposits = deposits.filter((deposit) => depositMonth(deposit) === competency);
     const collectedInCents = monthCollections.reduce((sum, item) => sum + item.amountInCents, 0);
     const reservedMaintenanceCashInCents = monthCollections.reduce((sum, item) => sum + item.maintenanceCashInCents, 0);
     const depositedInCents = monthDeposits.reduce((sum, item) => sum + item.amountInCents, 0);
-    const expensesInCents = expenses.filter((expense) => expense.competency === competency).reduce((sum, item) => sum + item.amountInCents, 0);
-    const monthExpenses = expenses.filter((expense) => expense.competency === competency);
+    const monthExpenses = expenses.filter((expense) => expenseMonth(expense) === competency);
+    const expensesInCents = monthExpenses.reduce((sum, item) => sum + item.amountInCents, 0);
+    const statements = selectedChurchIds.map((id) => maintenanceStatement(database, id, `${competency}-01`, `${competency}-31`));
+    const cashOutstanding = database.collections.filter((item) => selectedIds.has(item.churchId) && item.date <= `${competency}-31`).reduce((sum, item) => sum + item.amountInCents - item.maintenanceCashInCents, 0)
+      - database.deposits.filter((item) => selectedIds.has(item.churchId) && item.status === "confirmed" && item.date <= `${competency}-31`).reduce((sum, item) => sum + item.amountInCents, 0);
     return {
       competency,
       label: monthLabel(competency),
       collectedInCents,
       reservedMaintenanceCashInCents,
       depositedInCents,
-      balanceInCents: (collectedInCents - reservedMaintenanceCashInCents) - depositedInCents,
+      balanceInCents: isCash ? cashOutstanding : (collectedInCents - reservedMaintenanceCashInCents) - depositedInCents,
+      maintenanceOpeningInCents: statements.reduce((sum, item) => sum + item.openingInCents, 0),
+      maintenanceIncomingInCents: statements.reduce((sum, item) => sum + item.incomingInCents, 0),
+      maintenanceSpentInCents: statements.reduce((sum, item) => sum + item.outgoingInCents, 0),
+      maintenanceBalanceInCents: statements.reduce((sum, item) => sum + item.balanceInCents, 0),
       normalInCents: monthCollections.filter((item) => item.collectionType === "normal").reduce((sum, item) => sum + item.amountInCents, 0),
       specialInCents: monthCollections.filter((item) => item.collectionType === "especial").reduce((sum, item) => sum + item.amountInCents, 0),
       cultoInCents: monthCollections.filter((item) => item.meetingType === "culto").reduce((sum, item) => sum + item.amountInCents, 0),
@@ -186,7 +208,8 @@ export function buildReport(database: AppDatabase, filters: ReportFilters): Repo
         sectorName: churchDetails.get(church.id)?.sectorName ?? "Sem setor",
         collectedInCents,
         depositedInCents,
-        balanceInCents: (collectedInCents - reservedMaintenanceCashInCents) - depositedInCents,
+        balanceInCents: isCash ? database.collections.filter((item) => item.churchId === church.id && item.date <= `${filters.to}-31`).reduce((sum, item) => sum + item.amountInCents - item.maintenanceCashInCents, 0)
+          - database.deposits.filter((item) => item.churchId === church.id && item.status === "confirmed" && item.date <= `${filters.to}-31`).reduce((sum, item) => sum + item.amountInCents, 0) : (collectedInCents - reservedMaintenanceCashInCents) - depositedInCents,
         expensesInCents,
         netResultInCents: collectedInCents - expensesInCents,
       };
@@ -213,7 +236,11 @@ export function buildReport(database: AppDatabase, filters: ReportFilters): Repo
       collectedInCents,
       reservedMaintenanceCashInCents,
       depositedInCents,
-      balanceInCents: (collectedInCents - reservedMaintenanceCashInCents) - depositedInCents,
+      balanceInCents: isCash ? months.at(-1)?.balanceInCents ?? 0 : (collectedInCents - reservedMaintenanceCashInCents) - depositedInCents,
+      maintenanceOpeningInCents: months[0]?.maintenanceOpeningInCents ?? 0,
+      maintenanceIncomingInCents: months.reduce((sum, item) => sum + item.maintenanceIncomingInCents, 0),
+      maintenanceSpentInCents: months.reduce((sum, item) => sum + item.maintenanceSpentInCents, 0),
+      maintenanceBalanceInCents: months.at(-1)?.maintenanceBalanceInCents ?? 0,
       normalInCents: months.reduce((sum, item) => sum + item.normalInCents, 0),
       specialInCents: months.reduce((sum, item) => sum + item.specialInCents, 0),
       cultoInCents: months.reduce((sum, item) => sum + item.cultoInCents, 0),

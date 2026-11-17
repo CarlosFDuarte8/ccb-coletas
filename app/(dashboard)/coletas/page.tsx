@@ -7,7 +7,6 @@ import {
   BuildingIcon,
   CalendarIcon,
   CheckCircleIcon,
-  DownloadIcon,
   PackageIcon,
   PlusIcon,
   ReceiptIcon,
@@ -16,6 +15,10 @@ import {
 } from "@/components/icons";
 import { CollectionForm } from "@/components/collections/collection-form";
 import { DepositForm } from "@/components/collections/deposit-form";
+import { CorrectionForm } from "@/components/collections/correction-form";
+import { BackupDownloadButton } from "@/components/backup/download-backup";
+import { maintenanceStatement } from "@/lib/domain/maintenance-account";
+import { useMutation } from "@/hooks/use-mutation";
 import { Modal } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useDatabase } from "@/hooks/use-database";
@@ -24,7 +27,7 @@ import { buildMonthlySchedule } from "@/lib/domain/schedule";
 import { databaseStore } from "@/lib/storage/database-store";
 import { useChurchSelection } from "@/components/churches/church-selection-provider";
 
-type OpenModal = "collection" | "deposit-new" | `deposit:${string}` | null;
+type OpenModal = "collection" | "deposit-new" | "reopen" | `deposit:${string}` | `reverse:${string}` | null;
 
 function previousCompetency(competency: string) {
   const [year, month] = competency.split("-").map(Number);
@@ -44,7 +47,8 @@ function formatDate(date: string) {
 
 export default function CollectionsPage() {
   const database = useDatabase();
-  const { church, churchId: selectedChurchId, setChurchId, competency, setCompetency } = useChurchSelection();
+  const { church, churchId: selectedChurchId, setChurchId, competency, setCompetency, canWrite, canCorrect } = useChurchSelection();
+  const { run, pending, error: actionError } = useMutation();
   const [openModal, setOpenModal] = useState<OpenModal>(null);
   const [selectedOccurrenceId, setSelectedOccurrenceId] = useState<string | null>(null);
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
@@ -71,9 +75,7 @@ export default function CollectionsPage() {
 
   const collected = collections.reduce((sum, item) => sum + item.amountInCents, 0);
   const reservedMaintenanceCash = collections.reduce((sum, item) => sum + item.maintenanceCashInCents, 0);
-  const paidFromMaintenanceCash = database.expenses
-    .filter((item) => item.churchId === selectedChurchId && item.competency === competency && item.status === "paid" && item.paymentSource === "maintenance_cash")
-    .reduce((sum, item) => sum + item.amountInCents, 0);
+  const maintenance = maintenanceStatement(database, selectedChurchId, `${competency}-01`, `${competency}-31`);
   const confirmedDeposits = deposits.filter((item) => item.status === "confirmed");
   const deposited = confirmedDeposits.reduce((sum, item) => sum + item.amountInCents, 0);
   const pendingDeposits = deposits.filter((item) => item.status === "draft");
@@ -85,23 +87,9 @@ export default function CollectionsPage() {
     .reduce((sum, item) => sum + item.amountInCents, 0);
   const comparison = previousTotal > 0 ? ((collected - previousTotal) / previousTotal) * 100 : null;
 
-  function exportBackup() {
-    const file = new Blob([JSON.stringify(database, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(file);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `ccb-coletas-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
   function closeMonth() {
     if (pendingDeposits.length > 0) {
       window.alert("Confirme ou exclua todos os depósitos em rascunho antes de fechar a competência.");
-      return;
-    }
-    if (paidFromMaintenanceCash > reservedMaintenanceCash) {
-      window.alert("As despesas pagas pelo caixa de manutenção ultrapassam o valor reservado nesta competência.");
       return;
     }
     if (outstanding !== 0) {
@@ -109,18 +97,17 @@ export default function CollectionsPage() {
       return;
     }
     if (window.confirm(`Fechar a competência ${formatCompetency(competency)}? Os registros ficarão bloqueados para edição.`)) {
-      databaseStore.closeCompetency(selectedChurchId, competency);
+      void run(() => databaseStore.closeCompetency(selectedChurchId, competency));
     }
   }
 
   function reopenMonth() {
-    if (window.confirm("Reabrir esta competência para correções?")) {
-      databaseStore.reopenCompetency(selectedChurchId, competency);
-    }
+    setOpenModal("reopen");
   }
 
   return (
     <div className="page-container">
+      {actionError && <p className="text-sm text-red-600" role="alert">{actionError}</p>}
       <section className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -129,7 +116,7 @@ export default function CollectionsPage() {
           </div>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Coletas e depósitos</h1>
           <p className="mt-2 max-w-2xl text-sm text-muted">Os registros exibidos pertencem somente à competência selecionada.</p>
-          <button className="button-ghost mt-2 -ml-2" onClick={exportBackup} type="button"><DownloadIcon className="size-4" /> Exportar backup</button>
+          <BackupDownloadButton className="button-ghost mt-2 -ml-2" label="Exportar dados" />
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 lg:min-w-48">
           <label className="field-label lg:hidden">
@@ -159,9 +146,9 @@ export default function CollectionsPage() {
             </div>
           </div>
           {isClosed ? (
-            <button className="button-secondary" onClick={reopenMonth} type="button">Reabrir competência</button>
+            canCorrect && <button className="button-secondary" disabled={pending} onClick={reopenMonth} type="button">Reabrir competência</button>
           ) : (
-            <button className="button-secondary" onClick={closeMonth} type="button"><CheckCircleIcon className="size-4" /> Fechar mês</button>
+            canWrite && <button className="button-secondary" disabled={pending} onClick={closeMonth} type="button"><CheckCircleIcon className="size-4" /> Fechar mês</button>
           )}
         </div>
       )}
@@ -169,7 +156,7 @@ export default function CollectionsPage() {
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Resumo financeiro">
         <SummaryCard icon={PackageIcon} label="Total coletado" value={formatCurrency(collected)} detail={`${collections.length} lançamento${collections.length === 1 ? "" : "s"}`} tone="brand" />
         <SummaryCard icon={BanknoteIcon} label="Total depositado" value={formatCurrency(deposited)} detail={`${confirmedDeposits.length} confirmado${confirmedDeposits.length === 1 ? "" : "s"}`} tone="blue" />
-        <SummaryCard icon={ReceiptIcon} label="Caixa de manutenção" value={formatCurrency(reservedMaintenanceCash)} detail={`Usado em despesas: ${formatCurrency(paidFromMaintenanceCash)}`} tone={paidFromMaintenanceCash > reservedMaintenanceCash ? "amber" : "green"} />
+        <SummaryCard icon={ReceiptIcon} label="Saldo local de manutenção" value={formatCurrency(maintenance.balanceInCents)} detail={`Anterior: ${formatCurrency(maintenance.openingInCents)} · Entradas: ${formatCurrency(maintenance.incomingInCents)} · Pagamentos: ${formatCurrency(maintenance.outgoingInCents)}`} tone="green" />
         <SummaryCard icon={ReceiptIcon} label="A depositar" value={formatCurrency(outstanding)} detail={pendingDeposits.length > 0 ? `${pendingDeposits.length} depósito${pendingDeposits.length === 1 ? "" : "s"} em rascunho · esperado: ${formatCurrency(expectedDeposits)}` : `Esperado: ${formatCurrency(expectedDeposits)}`} tone={outstanding !== 0 ? "amber" : "green"} />
         <SummaryCard icon={BuildingIcon} label="Comparação mensal" value={comparison === null ? "—" : `${comparison >= 0 ? "+" : ""}${comparison.toFixed(1)}%`} detail={`Anterior: ${formatCurrency(previousTotal)}`} tone="green" />
       </section>
@@ -201,7 +188,7 @@ export default function CollectionsPage() {
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
                   <div>{entries.length > 0 ? <><p className="text-xs font-semibold text-brand">{formatCurrency(occurrenceTotal)}</p><p className="text-[10px] text-muted">{occurrenceTotal === 0 ? "Confirmado sem arrecadação" : `${entries.length} registro${entries.length === 1 ? "" : "s"}`}</p></> : <span className="record-badge record-draft">Pendente</span>}</div>
-                  {!isClosed && <button className={entries.length > 0 ? "button-ghost" : "button-secondary"} onClick={() => { setSelectedOccurrenceId(occurrence.id); setSelectedCollectionId(entries[0]?.id ?? null); setOpenModal("collection"); }} type="button">{entries.length > 0 ? "Editar" : "Registrar"}</button>}
+                  {!isClosed && canWrite && <button className={entries.length > 0 ? "button-ghost" : "button-secondary"} onClick={() => { setSelectedOccurrenceId(occurrence.id); setSelectedCollectionId(entries[0]?.id ?? null); setOpenModal("collection"); }} type="button">{entries.length > 0 ? "Editar" : "Registrar"}</button>}
                 </div>
               </article>
             );
@@ -210,7 +197,7 @@ export default function CollectionsPage() {
         </div>
       </section>
 
-      {!isClosed && (
+      {!isClosed && canWrite && (
         <section className="flex flex-col gap-2 sm:flex-row">
           <button className="button-primary" onClick={() => { setSelectedOccurrenceId(null); setSelectedCollectionId(null); setOpenModal("collection"); }} type="button"><PlusIcon className="size-4" /> Coleta fora da programação</button>
           <button className="button-secondary" onClick={() => setOpenModal("deposit-new")} type="button"><BanknoteIcon className="size-4" /> Gerar depósito</button>
@@ -234,7 +221,7 @@ export default function CollectionsPage() {
                     <td><span className={`record-badge record-${item.collectionType}`}>{item.collectionType === "normal" ? "Normal" : "Especial"}</span></td>
                     <td className="text-right font-semibold text-foreground">{formatCurrency(item.amountInCents)}</td>
                     <td className="text-right">{formatCurrency(item.maintenanceCashInCents)}</td>
-                    <td className="w-20">{!isClosed && <div className="flex justify-end gap-1"><button aria-label="Editar coleta" className="icon-button size-8" onClick={() => { const occurrence = scheduledOccurrences.find((scheduled) => scheduled.date === item.date && scheduled.serviceScheduleId === item.serviceScheduleId); setSelectedOccurrenceId(occurrence?.id ?? null); setSelectedCollectionId(item.id); setOpenModal("collection"); }} title="Editar coleta" type="button"><ArrowUpRightIcon className="size-4" /></button><DeleteButton label="Excluir coleta" onDelete={() => databaseStore.removeCollection(item.id)} /></div>}</td>
+                    <td className="w-20">{!isClosed && canWrite && <div className="flex justify-end gap-1"><button aria-label="Editar coleta" className="icon-button size-8" onClick={() => { const occurrence = scheduledOccurrences.find((scheduled) => scheduled.date === item.date && scheduled.serviceScheduleId === item.serviceScheduleId); setSelectedOccurrenceId(occurrence?.id ?? null); setSelectedCollectionId(item.id); setOpenModal("collection"); }} title="Editar coleta" type="button"><ArrowUpRightIcon className="size-4" /></button><DeleteButton label="Excluir coleta" onDelete={() => databaseStore.removeCollection(item.id)} /></div>}</td>
                   </tr>
                 ))}
                 {collections.length === 0 && <tr><td className="empty-cell" colSpan={6}>Nenhuma coleta registrada em {formatCompetency(competency)}.</td></tr>}
@@ -254,14 +241,15 @@ export default function CollectionsPage() {
               <tbody>
                 {deposits.map((item) => (
                   <tr key={item.id}>
-                    <td><span className={`record-badge record-${item.status}`}>{item.status === "confirmed" ? "Confirmado" : "Rascunho"}</span></td>
+                    <td><span className={`record-badge record-${item.status === "reversed" ? "especial" : item.status}`}>{item.status === "confirmed" ? "Confirmado" : item.status === "reversed" ? "Estornado" : "Rascunho"}</span>{item.reversalReason && <p className="mt-1 max-w-48 text-xs text-muted">{item.reversalReason}</p>}</td>
                     <td>{formatDate(item.date)}</td>
                     <td className="font-mono text-xs">{item.transactionNumber || "—"}</td>
                     <td className="text-right font-semibold text-foreground">{formatCurrency(item.amountInCents)}</td>
                     <td className="w-20">
                       <div className="flex justify-end gap-1">
                         <button aria-label="Abrir depósito" className="icon-button size-8" onClick={() => setOpenModal(`deposit:${item.id}`)} title="Abrir depósito" type="button"><ArrowUpRightIcon className="size-4" /></button>
-                        {!isClosed && <DeleteButton label="Excluir depósito" onDelete={() => databaseStore.removeDeposit(item.id)} />}
+                        {!isClosed && canWrite && item.status === "draft" && <DeleteButton label="Excluir depósito" onDelete={() => databaseStore.removeDeposit(item.id)} />}
+                        {!isClosed && canCorrect && item.status === "confirmed" && <button className="button-ghost text-red-600" onClick={() => setOpenModal(`reverse:${item.id}`)} type="button">Estornar</button>}
                       </div>
                     </td>
                   </tr>
@@ -301,6 +289,12 @@ export default function CollectionsPage() {
       >
         {activeDeposit && <DepositForm churchId={selectedChurchId} competency={competency} deposit={activeDeposit} key={activeDeposit.updatedAt} onSuccess={() => setOpenModal(null)} />}
       </Modal>
+      <Modal onClose={() => setOpenModal(null)} open={openModal === "reopen"} title="Reabrir competência">
+        <CorrectionForm action={(reason) => databaseStore.reopenCompetency(selectedChurchId, competency, reason)} buttonLabel="Reabrir competência" description="A reabertura libera correções e registra o responsável e o motivo no histórico." onSuccess={() => setOpenModal(null)} />
+      </Modal>
+      <Modal onClose={() => setOpenModal(null)} open={Boolean(openModal?.startsWith("reverse:"))} title="Estornar depósito">
+        <CorrectionForm action={(reason) => databaseStore.reverseDeposit(openModal?.slice("reverse:".length) ?? "", reason)} buttonLabel="Estornar registro" description="O registro original será preservado e sairá dos totais. Depois, registre o depósito correto e confira a conciliação." onSuccess={() => setOpenModal(null)} />
+      </Modal>
     </div>
   );
 }
@@ -316,9 +310,10 @@ function SummaryCard({ icon: Icon, label, value, detail, tone }: { icon: typeof 
   );
 }
 
-function DeleteButton({ label, onDelete }: { label: string; onDelete: () => void }) {
+function DeleteButton({ label, onDelete }: { label: string; onDelete: () => Promise<unknown> }) {
+  const { run, pending } = useMutation();
   return (
-    <button aria-label={label} className="icon-button size-8 text-muted hover:text-red-600" onClick={() => { if (window.confirm("Deseja realmente excluir este registro?")) onDelete(); }} title={label} type="button">
+    <button aria-label={label} className="icon-button size-8 text-muted hover:text-red-600" disabled={pending} onClick={() => { if (window.confirm("Deseja realmente excluir este registro?")) void run(onDelete); }} title={label} type="button">
       <TrashIcon className="size-4" />
     </button>
   );

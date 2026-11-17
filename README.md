@@ -9,6 +9,8 @@ npm install
 npm run dev
 ```
 
+Use Node.js 22. As variáveis necessárias estão em [.env.example](.env.example).
+
 A aplicação estará disponível em [http://localhost:3000](http://localhost:3000).
 
 ## Organização
@@ -33,6 +35,8 @@ Os arquivos `page.tsx` e `layout.tsx` permanecem Server Components por padrão. 
 - `npm run build`: build otimizado de produção
 - `npm run start`: executa o build de produção
 - `npm run lint`: valida a qualidade do código
+- `npm run typecheck`: verifica os tipos TypeScript
+- `npm test`: executa testes financeiros e de permissões em PostgreSQL local em memória
 - `npm run db:migrate`: aplica as novas migrações PostgreSQL no Supabase
 - `npm run db:status`: verifica estrutura, dados, auditoria e Realtime
 
@@ -52,9 +56,9 @@ O Supabase Auth identifica os usuários e as políticas RLS limitam menus, igrej
 2. Registre as coletas da competência.
 3. Gere o depósito como rascunho pela contagem de cédulas e moedas.
 4. Abra o rascunho, informe a data bancária e o comprovante e confirme-o. A data pode pertencer ao mês seguinte sem alterar a competência.
-5. Feche o mês quando não houver rascunhos ou diferença entre o total coletado e depositado.
+5. Feche o mês quando não houver rascunhos ou diferença entre o valor esperado para a administração (coletado menos a reserva local) e os depósitos confirmados.
 
-Uma competência fechada bloqueia inclusões, alterações e exclusões. Ela pode ser reaberta explicitamente para uma correção auditável no fluxo da interface.
+Uma competência fechada protege coletas, depósitos e os valores e referências das despesas. Pagamentos de despesas já reconhecidas podem ser registrados em um mês posterior aberto. Correções do período fechado exigem reabertura administrativa com motivo e auditoria.
 
 ## Programação das igrejas
 
@@ -67,3 +71,11 @@ Na competência mensal, as coletas previstas são calculadas automaticamente a p
 As despesas são registradas separadamente por igreja e mês de referência, com vencimento e pagamento independentes, além de categoria, favorecido e documento. Os relatórios consolidam arrecadação, depósitos, despesas, resultado líquido e conciliação sem misturar os conceitos contábeis.
 
 Em **Configurações**, os dados do Supabase podem ser exportados ou importados em JSON pelo Superadministrador. A importação é validada no servidor e enviada diretamente ao banco remoto.
+
+## Continuidade do projeto
+
+- [Plano de evolução e andamento](docs/PLANO_DE_EVOLUCAO.md)
+- [Regras financeiras: competência, caixa, saldo local e correções](docs/REGRAS_FINANCEIRAS.md)
+- [Operação, testes, homologação e backups](docs/OPERACAO_E_VALIDACAO.md)
+
+As gravações operacionais usam uma transação no banco. O saldo local é acumulado entre os meses, e os relatórios oferecem visões por competência e por datas de movimentação. Depósitos confirmados são corrigidos por estorno com motivo; reaberturas exigem um administrador autorizado.

@@ -83,8 +83,10 @@ export type Deposit = {
   amountInCents: number;
   denominationCounts: DenominationCount;
   notes: string;
-  status: "draft" | "confirmed";
+  status: "draft" | "confirmed" | "reversed";
   confirmedAt: string | null;
+  reversedAt?: string | null;
+  reversalReason?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -95,6 +97,7 @@ export type MonthlyCompetency = {
   competency: string;
   status: "open" | "closed";
   closedAt: string | null;
+  reopenReason?: string;
   createdAt: string;
   updatedAt: string;
 };

@@ -5,6 +5,7 @@ import { useDatabase } from "@/hooks/use-database";
 import type { Church } from "@/lib/domain/types";
 import { selectedChurchStore } from "@/lib/storage/selected-church";
 import { selectedCompetencyStore } from "@/lib/storage/selected-competency";
+import type { AppUserContext } from "@/lib/auth/types";
 
 type ChurchSelectionValue = {
   churchId: string;
@@ -13,11 +14,14 @@ type ChurchSelectionValue = {
   setChurchId: (churchId: string) => void;
   competency: string;
   setCompetency: (competency: string) => void;
+  canWrite: boolean;
+  canCorrect: boolean;
+  user: AppUserContext;
 };
 
 const ChurchSelectionContext = createContext<ChurchSelectionValue | null>(null);
 
-export function ChurchSelectionProvider({ children, allowedChurchIds, userId }: { children: React.ReactNode; allowedChurchIds: string[] | null; userId: string }) {
+export function ChurchSelectionProvider({ children, allowedChurchIds, userId, user }: { children: React.ReactNode; allowedChurchIds: string[] | null; userId: string; user: AppUserContext }) {
   const database = useDatabase(userId);
   const storedId = useSyncExternalStore(selectedChurchStore.subscribe, selectedChurchStore.getSnapshot, selectedChurchStore.getServerSnapshot);
   const storedCompetency = useSyncExternalStore(selectedCompetencyStore.subscribe, selectedCompetencyStore.getSnapshot, selectedCompetencyStore.getServerSnapshot);
@@ -28,6 +32,7 @@ export function ChurchSelectionProvider({ children, allowedChurchIds, userId }: 
   const now = new Date();
   const defaultCompetency = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const competency = /^\d{4}-\d{2}$/.test(storedCompetency) ? storedCompetency : defaultCompetency;
+  const canWrite = Boolean(church && (user.writableChurchIds === null || user.writableChurchIds.includes(church.id)));
   const value = useMemo(() => ({
     churchId: church?.id ?? "",
     church,
@@ -35,7 +40,10 @@ export function ChurchSelectionProvider({ children, allowedChurchIds, userId }: 
     setChurchId: (churchId: string) => selectedChurchStore.set(churchId),
     competency,
     setCompetency: (competency: string) => selectedCompetencyStore.set(competency),
-  }), [church, churches, competency]);
+    canWrite,
+    canCorrect: canWrite && ["super_admin", "administrator", "sector_manager"].includes(user.role),
+    user,
+  }), [church, churches, competency, canWrite, user]);
   return <ChurchSelectionContext.Provider value={value}>{children}</ChurchSelectionContext.Provider>;
 }
 

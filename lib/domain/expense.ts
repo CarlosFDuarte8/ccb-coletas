@@ -1,8 +1,8 @@
 import type { Expense } from "@/lib/domain/types";
 
 export const paymentSources: Array<{ value: Expense["paymentSource"]; label: string }> = [
-  { value: "administration_account", label: "Conta da administração" },
-  { value: "maintenance_cash", label: "Caixa de manutenção" },
+  { value: "administration_account", label: "Administração geral do DF" },
+  { value: "maintenance_cash", label: "Caixa local de manutenção preventiva" },
 ];
 
 export const paymentMethods: Array<{ value: Expense["paymentMethod"]; label: string }> = [
